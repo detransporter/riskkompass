@@ -9,7 +9,7 @@ DATABAS_FIL = "lager_data_v4.pkl"
 class LagerAppV4:
     def __init__(self, root):
         self.root = root
-        self.root.title("Lagerhantering V4 - Dashboard & Detaljvy")
+        self.root.title("Inventory Management V4 - Dashboard & Detail View")
         self.root.geometry("1400x900")
 
         # --- FÄRGER (Hårdkodade för att undvika vita-text-problem) ---
@@ -75,20 +75,20 @@ class LagerAppV4:
     def bygg_sidebar(self):
         """Skapar knapparna i vänstermenyn"""
         # Logga/Titel
-        tk.Label(self.sidebar, text="LAGER\nSYSTEM", bg=self.c_sidebar_bg, fg=self.c_sidebar_fg, 
-                 font=("Arial", 20, "bold"), pady=30).pack()
+        tk.Label(self.sidebar, text="INVENTORY\nSYSTEM", bg=self.c_sidebar_bg, fg=self.c_sidebar_fg, 
+             font=("Arial", 20, "bold"), pady=30).pack()
 
         # Knappar
         self.skapa_menyknapp("📊  Dashboard", self.visa_dashboard)
-        self.skapa_menyknapp("📦  Alla Artiklar", lambda: self.visa_lista("all"))
+        self.skapa_menyknapp("📦  All Items", lambda: self.visa_lista("all"))
         self.skapa_menyknapp("⚠️  Overstock", lambda: self.visa_lista("overstock"))
         self.skapa_menyknapp("📉  Deadstock", lambda: self.visa_lista("deadstock"))
-        self.skapa_menyknapp("📈  Konsumtion", lambda: self.visa_lista("consumption"))
+        self.skapa_menyknapp("📈  Consumption", lambda: self.visa_lista("consumption"))
         
         # Spacer
         tk.Frame(self.sidebar, bg=self.c_sidebar_bg, height=50).pack()
         
-        self.skapa_menyknapp("⚙️  Inställningar / Ladda", self.visa_installningar)
+        self.skapa_menyknapp("⚙️  Settings / Load", self.visa_installningar)
 
     def skapa_menyknapp(self, text, command):
         btn = tk.Button(self.sidebar, text=text, command=command,
@@ -113,7 +113,7 @@ class LagerAppV4:
                  bg=self.c_main_bg, fg=self.c_text_main).pack(anchor="w", padx=30, pady=30)
 
         if self.df_combined is None:
-            tk.Label(self.main_area, text="Ingen data laddad. Gå till Inställningar för att ladda filer.",
+            tk.Label(self.main_area, text="No data loaded. Go to Settings to load files.",
                      bg=self.c_main_bg, fg="red", font=("Arial", 14)).pack(padx=30)
             return
 
@@ -131,14 +131,14 @@ class LagerAppV4:
         kpi_frame = tk.Frame(self.main_area, bg=self.c_main_bg)
         kpi_frame.pack(fill="x", padx=20)
 
-        self.skapa_kpi_kort(kpi_frame, "Totalt Antal Artiklar", f"{count_total}", "#3498db")
-        self.skapa_kpi_kort(kpi_frame, "Deadstock (Varning)", f"{count_dead}", "#e74c3c")
-        self.skapa_kpi_kort(kpi_frame, "Overstock (Varning)", f"{count_over}", "#f39c12")
-        self.skapa_kpi_kort(kpi_frame, "Inbound Rader", f"{inbound_count}", "#27ae60")
+        self.skapa_kpi_kort(kpi_frame, "Total Items", f"{count_total}", "#3498db")
+        self.skapa_kpi_kort(kpi_frame, "Deadstock (Warning)", f"{count_dead}", "#e74c3c")
+        self.skapa_kpi_kort(kpi_frame, "Overstock (Warning)", f"{count_over}", "#f39c12")
+        self.skapa_kpi_kort(kpi_frame, "Inbound Items", f"{inbound_count}", "#27ae60")
 
         # Info text
-        tk.Label(self.main_area, text="Välj en vy i menyn till vänster för att se detaljer.", 
-                 bg=self.c_main_bg, fg="#7f8c8d", pady=20).pack()
+        tk.Label(self.main_area, text="Choose a view in the left menu to see details.", 
+             bg=self.c_main_bg, fg="#7f8c8d", pady=20).pack()
 
     def skapa_kpi_kort(self, parent, titel, varde, farg):
         card = tk.Frame(parent, bg="white", bd=0, relief="raised")
@@ -151,7 +151,7 @@ class LagerAppV4:
     def visa_lista(self, vy_typ):
         self.rensa_main_area()
         if self.df_combined is None:
-            tk.Label(self.main_area, text="Ingen data. Ladda filer först.", bg=self.c_main_bg, fg="black").pack(pady=50)
+            tk.Label(self.main_area, text="No data. Load files first.", bg=self.c_main_bg, fg="black").pack(pady=50)
             return
 
         # 1. Header & Filter Panel
@@ -250,13 +250,14 @@ class LagerAppV4:
                 self.status_vars[status] = var
 
     def uppdatera_tabell(self, vy_typ, search_text):
-        # Rensa
+        # Clear tree
         self.tree.delete(*self.tree.get_children())
-        
-        df = self.current_view_df
-        if df is None or df.empty: return
 
-        # 1. Filter: Söktext
+        df = self.current_view_df
+        if df is None or df.empty:
+            return
+
+        # 1. Filter: Search text
         search_text = search_text.lower()
         mask_text = (
             df['SK Number'].astype(str).str.lower().str.contains(search_text, na=False) |
@@ -264,78 +265,83 @@ class LagerAppV4:
             df['ITEM DESCRIPTION'].astype(str).str.lower().str.contains(search_text, na=False)
         )
 
-        # 2. Filter: Status Checkboxar
-        valda_statusar = [s for s, var in self.status_vars.items() if var.get()]
-        mask_status = df['ITEM STATUS'].astype(str).isin(valda_statusar)
+        # 2. Filter: Status checkboxes
+        selected_statuses = [s for s, var in self.status_vars.items() if var.get()]
+        if selected_statuses:
+            mask_status = df['ITEM STATUS'].astype(str).isin(selected_statuses)
+            final_df = df[mask_text & mask_status]
+        else:
+            final_df = df[mask_text]
 
-        final_df = df[mask_text & mask_status]
-
-        # Rita ut
+        # Insert rows
         for _, row in final_df.iterrows():
             calc_stat = "OK"
-            if row['Is_Deadstock']: calc_stat = "DEADSTOCK"
-            elif row['Is_Overstock']: calc_stat = "OVERSTOCK"
+            if row.get('Is_Deadstock'):
+                if row['Is_Deadstock']:
+                    calc_stat = "DEADSTOCK"
+            if row.get('Is_Overstock'):
+                if row['Is_Overstock'] and calc_stat == "OK":
+                    calc_stat = "OVERSTOCK"
 
             vals = (
-                row['SK Number'],
-                row['GP Number'],
-                row['ITEM DESCRIPTION'],
-                row['ITEM STATUS'],
-                int(row['Current Stock']),
-                int(row['Total_Outbound']),
-                int(row['Total_Inbound']),
+                row.get('SK Number', ''),
+                row.get('GP Number', ''),
+                row.get('ITEM DESCRIPTION', ''),
+                row.get('ITEM STATUS', ''),
+                int(row.get('Current Stock', 0)),
+                int(row.get('Total_Outbound', 0)),
+                int(row.get('Total_Inbound', 0)),
                 calc_stat
             )
             self.tree.insert("", "end", values=vals)
-
     # =========================================================================
     # DETALJVY (POPUP)
     # =========================================================================
     
     def oppna_detaljvy(self, event):
-        """Visar ett fönster med all info om vald artikel"""
-        selected_item = self.tree.selection()
-        if not selected_item: return
+        """Show a window with all info for the selected item"""
+        selection = self.tree.selection()
+        if not selection:
+            return
 
-        # Hämta data från raden
-        vals = self.tree.item(selected_item)['values']
-        sk_num = str(vals[0]) # SK Number är först
+        item = self.tree.item(selection[0])
+        sku = item['values'][0]
 
-        # Hämta hela raden från dataframe
-        row = self.df_combined[self.df_combined['SK Number'].astype(str) == sk_num].iloc[0]
+        # Get row from dataframe
+        try:
+            row = self.df_combined[self.df_combined['SK Number'].astype(str) == str(sku)].iloc[0]
+        except Exception:
+            return
 
+        # Create detail popup (rest of UI built below)
         # Skapa Popup
         popup = tk.Toplevel(self.root)
-        popup.title(f"Detaljer: {sk_num}")
+        popup.title(f"Details: {sku}")
         popup.geometry("700x500")
-        popup.configure(bg="white", fg="black")
 
         # HEADER
         header = tk.Frame(popup, bg="#ecf0f1", pady=20)
         header.pack(fill="x")
         
         tk.Label(header, text=f"{row['ITEM DESCRIPTION']}", font=("Arial", 16, "bold"), bg="#ecf0f1", fg="black", activeforeground="black").pack()
-        tk.Label(header, text=f"SK: {sk_num}  |  GP: {row['GP Number']}  |  Status: {row['ITEM STATUS']}", 
+        tk.Label(header, text=f"SK: {sku}  |  GP: {row['GP Number']}  |  Status: {row['ITEM STATUS']}", 
              font=("Arial", 10), bg="#ecf0f1", fg="black").pack()
 
-        # CONTENT GRID
         content = tk.Frame(popup, bg="white", pady=20, padx=20)
-        content.pack(fill="both", expand=True)
-
         # Vänster: Data
         left = tk.Frame(content, bg="white")
         left.pack(side="left", fill="both", expand=True)
 
-        tk.Label(left, text="LAGER & FLÖDE", font=("Arial", 12, "bold", "underline"), bg="white", fg="black").pack(anchor="w", pady=(0,10))
-        self.rad(left, "Nuvarande Lager:", f"{int(row['Current Stock'])}")
-        self.rad(left, "Sålt (Outbound):", f"{int(row['Total_Outbound'])}")
-        self.rad(left, "På väg in (Inbound):", f"{int(row['Total_Inbound'])}", farg="#27ae60")
+        tk.Label(left, text="STOCK & FLOW", font=("Arial", 12, "bold", "underline"), bg="white", fg="black").pack(anchor="w", pady=(0,10))
+        self.rad(left, "Current Stock:", f"{int(row['Current Stock'])}")
+        self.rad(left, "Sold (Outbound):", f"{int(row['Total_Outbound'])}")
+        self.rad(left, "Incoming (Inbound):", f"{int(row['Total_Inbound'])}", farg="#27ae60")
 
         # Höger: Analys
         right = tk.Frame(content, bg="white")
         right.pack(side="right", fill="both", expand=True)
 
-        tk.Label(right, text="ANALYS", font=("Arial", 12, "bold", "underline"), bg="white", fg="black").pack(anchor="w", pady=(0,10))
+        tk.Label(right, text="ANALYSIS", font=("Arial", 12, "bold", "underline"), bg="white", fg="black").pack(anchor="w", pady=(0,10))
         
         status_text = "OK"
         bg_col = "#2ecc71" # Grön
@@ -353,11 +359,11 @@ class LagerAppV4:
         # Rekommendation
         rec = ""
         if row['Is_Deadstock'] and row['Total_Inbound'] > 0:
-            rec = "⚠️ KRITISKT: Varan säljer inte men mer är på väg in!\nStoppa ordern om möjligt."
+            rec = "⚠️ CRITICAL: Item isn't selling but more is incoming!\nStop the order if possible."
         elif row['Is_Deadstock']:
-            rec = "Varan står still. Överväg utförsäljning eller skrot."
+            rec = "Item is stagnant. Consider clearance or disposal."
         elif row['Is_Overstock']:
-            rec = "Lagret är onödigt högt i förhållande till försäljning."
+            rec = "Stock level is unnecessarily high compared to sales."
         
         if rec:
             tk.Label(right, text=rec, bg="white", fg="black", justify="left", font=("Arial", 10, "italic")).pack(anchor="w")
@@ -374,21 +380,21 @@ class LagerAppV4:
 
     def visa_installningar(self):
         self.rensa_main_area()
-        tk.Label(self.main_area, text="Inställningar", font=("Arial", 24, "bold"), 
-                 bg=self.c_main_bg, fg="black").pack(anchor="w", padx=30, pady=30)
+        tk.Label(self.main_area, text="Settings", font=("Arial", 24, "bold"), 
+             bg=self.c_main_bg, fg="black").pack(anchor="w", padx=30, pady=30)
         
         frame = tk.Frame(self.main_area, bg="white", padx=20, pady=20)
         frame.pack(padx=30, fill="x")
 
-        tk.Label(frame, text="Hantera Data", font=("Arial", 14, "bold"), bg="white", fg="black").pack(anchor="w")
-        tk.Label(frame, text="För att uppdatera systemet, välj alla 4 filerna igen (Master, Stock, Outbound, Inbound).", 
-                 bg="white", fg="#555").pack(anchor="w", pady=5)
+        tk.Label(frame, text="Manage Data", font=("Arial", 14, "bold"), bg="white", fg="black").pack(anchor="w")
+        tk.Label(frame, text="To update the system, select all 4 files again (Master, Stock, Outbound, Inbound).", 
+             bg="white", fg="#555").pack(anchor="w", pady=5)
 
-        tk.Button(frame, text="1. Ladda Filer & Starta Om", command=self.ladda_nya_filer, 
-                  bg="#3498db", fg="white", font=("Arial", 12, "bold"), pady=10).pack(anchor="w", pady=20)
+        tk.Button(frame, text="1. Load Files & Restart", command=self.ladda_nya_filer, 
+              bg="#3498db", fg="white", font=("Arial", 12, "bold"), pady=10).pack(anchor="w", pady=20)
 
-        tk.Button(frame, text="Rensa all sparad data", command=self.rensa_data, 
-                  bg="#e74c3c", fg="white", font=("Arial", 10)).pack(anchor="w")
+        tk.Button(frame, text="Clear all saved data", command=self.rensa_data, 
+              bg="#e74c3c", fg="white", font=("Arial", 10)).pack(anchor="w")
 
     def ladda_sparad_databas(self):
         if os.path.exists(DATABAS_FIL):
@@ -400,10 +406,10 @@ class LagerAppV4:
                 self.df_inbound = data.get('inbound')
                 self.berakna_data(visa_popup=False)
             except Exception as e:
-                print(f"Fel vid laddning: {e}")
+                print(f"Error loading: {e}")
 
     def ladda_nya_filer(self):
-        files = filedialog.askopenfilenames(title="Markera Master, Stock, Outbound, Inbound", 
+        files = filedialog.askopenfilenames(title="Select Master, Stock, Outbound, Inbound", 
                                             filetypes=[("Excel files", "*.xlsx")])
         if not files: return
         
@@ -424,7 +430,7 @@ class LagerAppV4:
 
             # Vi kräver åtminstone Master och Stock
             if tm is None or ts is None:
-                messagebox.showerror("Fel", "Masterdata och Stock måste finnas med!")
+                messagebox.showerror("Error", "Master and Stock data must be included!")
                 return
             
             self.df_master, self.df_stock, self.df_outbound, self.df_inbound = tm, ts, to, ti
@@ -434,11 +440,11 @@ class LagerAppV4:
             pd.to_pickle(data, DATABAS_FIL)
             
             self.berakna_data()
-            self.visa_dashboard() # Gå tillbaka till start
-            messagebox.showinfo("Klart", "Data uppdaterad!")
+            self.visa_dashboard() # Return to dashboard
+            messagebox.showinfo("Done", "Data updated!")
 
         except Exception as e:
-            messagebox.showerror("Fel", f"Kunde inte läsa filer: {e}")
+            messagebox.showerror("Error", f"Could not read files: {e}")
 
     def berakna_data(self, visa_popup=True):
         if self.df_stock is None: return
@@ -495,7 +501,7 @@ class LagerAppV4:
             
         except Exception as e:
             print(f"Beräkningsfel: {e}")
-            if visa_popup: messagebox.showerror("Fel", str(e))
+            if visa_popup: messagebox.showerror("Error", str(e))
 
     def sortera_kolumn(self, col, reverse):
         l = [(self.tree.set(k, col), k) for k in self.tree.get_children('')]
@@ -508,7 +514,7 @@ class LagerAppV4:
         self.tree.heading(col, command=lambda: self.sortera_kolumn(col, not reverse))
 
     def rensa_data(self):
-        if messagebox.askyesno("Rensa", "Vill du radera all data och starta om?"):
+        if messagebox.askyesno("Clear", "Do you want to delete all data and restart?"):
             if os.path.exists(DATABAS_FIL): os.remove(DATABAS_FIL)
             self.df_combined = None
             self.df_stock = None
