@@ -13,8 +13,8 @@ class LagerAppV4:
         self.root.geometry("1400x900")
 
         # --- FÄRGER (Hårdkodade för att undvika vita-text-problem) ---
-        self.c_sidebar_bg = "#2c3e50"     # Mörkblå meny
-        self.c_sidebar_fg = "white"       # Vit text i meny
+        self.c_sidebar_bg = "#f5f5f5"     # Ljus meny (ändrad så text kan vara svart)
+        self.c_sidebar_fg = "black"       # Svart text i meny
         self.c_main_bg = "#ecf0f1"        # Ljusgrå bakgrund
         self.c_card_bg = "white"          # Vita kort
         self.c_text_main = "black"        # SVART TEXT (Viktigt!)
@@ -93,8 +93,8 @@ class LagerAppV4:
     def skapa_menyknapp(self, text, command):
         btn = tk.Button(self.sidebar, text=text, command=command,
                         bg=self.c_sidebar_bg, fg=self.c_sidebar_fg, 
-                        font=("Arial", 11), bd=0, activebackground="#34495e", 
-                        activeforeground="white", anchor="w", padx=20, pady=10)
+                        font=("Arial", 11), bd=0, activebackground="#e0e0e0", 
+                        activeforeground="black", anchor="w", padx=20, pady=10)
         btn.pack(fill="x")
 
     def rensa_main_area(self):
