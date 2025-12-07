@@ -386,15 +386,16 @@ class LagerAppV4:
         frame = tk.Frame(self.main_area, bg="white", padx=20, pady=20)
         frame.pack(padx=30, fill="x")
 
-        tk.Label(frame, text="Manage Data", font=("Arial", 14, "bold"), bg="white", fg="black").pack(anchor="w")
+        tk.Label(frame, text="Manage Data", font=("Arial", 14, "bold"), bg="white", fg="#222222").pack(anchor="w")
         tk.Label(frame, text="To update the system, select all 4 files again (Master, Stock, Outbound, Inbound).", 
-             bg="white", fg="#555").pack(anchor="w", pady=5)
+                 bg="white", fg="#555").pack(anchor="w", pady=5)
 
+        # Use lighter button backgrounds with dark text for readability
         tk.Button(frame, text="1. Load Files & Restart", command=self.ladda_nya_filer, 
-              bg="#3498db", fg="white", font=("Arial", 12, "bold"), pady=10).pack(anchor="w", pady=20)
+                  bg="#cfe9ff", fg="black", font=("Arial", 12, "bold"), pady=10).pack(anchor="w", pady=20)
 
         tk.Button(frame, text="Clear all saved data", command=self.rensa_data, 
-              bg="#e74c3c", fg="white", font=("Arial", 10)).pack(anchor="w")
+                  bg="#f7c6c3", fg="black", font=("Arial", 10)).pack(anchor="w")
 
     def ladda_sparad_databas(self):
         if os.path.exists(DATABAS_FIL):
