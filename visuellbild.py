@@ -24,7 +24,6 @@ class LagerAppV4:
         self.df_master = None
         self.df_stock = None
         self.df_outbound = None
-        self.df_inbound = None  # NYTT: Inbound fil
         self.df_combined = None
         
         self.current_view_df = None # För filtrering
@@ -122,11 +121,6 @@ class LagerAppV4:
         count_dead = len(self.df_combined[self.df_combined['Is_Deadstock']])
         count_over = len(self.df_combined[self.df_combined['Is_Overstock']])
         
-        # Inbound count (antal rader/artiklar på väg in)
-        inbound_count = 0
-        if self.df_inbound is not None:
-            inbound_count = len(self.df_inbound)
-
         # KPI Rutor
         kpi_frame = tk.Frame(self.main_area, bg=self.c_main_bg)
         kpi_frame.pack(fill="x", padx=20)
@@ -134,7 +128,7 @@ class LagerAppV4:
         self.skapa_kpi_kort(kpi_frame, "Total Items", f"{count_total}", "#3498db")
         self.skapa_kpi_kort(kpi_frame, "Deadstock (Warning)", f"{count_dead}", "#e74c3c")
         self.skapa_kpi_kort(kpi_frame, "Overstock (Warning)", f"{count_over}", "#f39c12")
-        self.skapa_kpi_kort(kpi_frame, "Inbound Items", f"{inbound_count}", "#27ae60")
+        # Inbound file removed; inbound KPI not used
 
         # Info text
         tk.Label(self.main_area, text="Choose a view in the left menu to see details.", 
@@ -192,8 +186,7 @@ class LagerAppV4:
         table_frame = tk.Frame(self.main_area, bg="white")
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        cols = ("SK Number", "GP Number", "Description", "Item Status", "Stock", "Outbound", "Inbound", "Status")
-        
+        cols = ("SK Number", "GP Number", "Description", "Item Status", "Stock", "Outbound", "Status")
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", yscrollcommand=scrollbar.set)
         scrollbar.config(command=self.tree.yview)
@@ -206,7 +199,6 @@ class LagerAppV4:
         self.tree.column("Item Status", width=100, anchor="center")
         self.tree.column("Stock", width=80, anchor="center")
         self.tree.column("Outbound", width=80, anchor="center")
-        self.tree.column("Inbound", width=80, anchor="center") # NY KOLUMN
         self.tree.column("Status", width=100, anchor="center")
 
         for col in cols:
@@ -290,7 +282,6 @@ class LagerAppV4:
                 row.get('ITEM STATUS', ''),
                 int(row.get('Current Stock', 0)),
                 int(row.get('Total_Outbound', 0)),
-                int(row.get('Total_Inbound', 0)),
                 calc_stat
             )
             self.tree.insert("", "end", values=vals)
@@ -335,7 +326,6 @@ class LagerAppV4:
         tk.Label(left, text="STOCK & FLOW", font=("Arial", 12, "bold", "underline"), bg="white", fg="black").pack(anchor="w", pady=(0,10))
         self.rad(left, "Current Stock:", f"{int(row['Current Stock'])}")
         self.rad(left, "Sold (Outbound):", f"{int(row['Total_Outbound'])}")
-        self.rad(left, "Incoming (Inbound):", f"{int(row['Total_Inbound'])}", farg="#27ae60")
 
         # Höger: Analys
         right = tk.Frame(content, bg="white")
@@ -356,14 +346,12 @@ class LagerAppV4:
         lbl = tk.Label(right, text=status_text, bg=bg_col, fg="white", font=("Arial", 14, "bold"), padx=15, pady=5)
         lbl.pack(anchor="w", pady=10)
 
-        # Rekommendation
+        # Recommendation
         rec = ""
-        if row['Is_Deadstock'] and row['Total_Inbound'] > 0:
-            rec = "⚠️ CRITICAL: Item isn't selling but more is incoming!\nStop the order if possible."
-        elif row['Is_Deadstock']:
+        if row['Is_Deadstock']:
             rec = "Item is stagnant. Consider clearance or disposal."
         elif row['Is_Overstock']:
-            rec = "Stock level is unnecessarily high compared to sales."
+            rec = "Stock level is high compared to sales — investigate purchasing and reduce orders."
         
         if rec:
             tk.Label(right, text=rec, bg="white", fg="black", justify="left", font=("Arial", 10, "italic")).pack(anchor="w")
@@ -387,8 +375,7 @@ class LagerAppV4:
         frame.pack(padx=30, fill="x")
 
         tk.Label(frame, text="Manage Data", font=("Arial", 14, "bold"), bg="white", fg="#222222").pack(anchor="w")
-        tk.Label(frame, text="To update the system, select all 4 files again (Master, Stock, Outbound, Inbound).", 
-                 bg="white", fg="#555").pack(anchor="w", pady=5)
+        tk.Label(frame, text="To update the system, select these 3 files: Master, Stock, Outbound.", bg="white", fg="#555").pack(anchor="w", pady=5)
 
         # Use lighter button backgrounds with dark text for readability
         tk.Button(frame, text="1. Load Files & Restart", command=self.ladda_nya_filer, 
@@ -404,18 +391,17 @@ class LagerAppV4:
                 self.df_master = data.get('master')
                 self.df_stock = data.get('stock')
                 self.df_outbound = data.get('outbound')
-                self.df_inbound = data.get('inbound')
                 self.berakna_data(visa_popup=False)
             except Exception as e:
                 print(f"Error loading: {e}")
 
     def ladda_nya_filer(self):
-        files = filedialog.askopenfilenames(title="Select Master, Stock, Outbound, Inbound", 
-                                            filetypes=[("Excel files", "*.xlsx")])
+        files = filedialog.askopenfilenames(title="Select Master, Stock, Outbound", 
+                            filetypes=[("Excel files", "*.xlsx")])
         if not files: return
         
         try:
-            tm, ts, to, ti = None, None, None, None
+            tm, ts, to = None, None, None
             for p in files:
                 fn = os.path.basename(p).lower()
                 df = pd.read_excel(p, engine='openpyxl')
@@ -427,17 +413,17 @@ class LagerAppV4:
                     ts = df
                     if 'Item' in ts.columns: ts.rename(columns={'Item': 'SK Number'}, inplace=True)
                 elif "outbound" in fn: to = df
-                elif "inbound" in fn: ti = df # Fånga inbound
+                # inbound file removed
 
             # Vi kräver åtminstone Master och Stock
             if tm is None or ts is None:
                 messagebox.showerror("Error", "Master and Stock data must be included!")
                 return
             
-            self.df_master, self.df_stock, self.df_outbound, self.df_inbound = tm, ts, to, ti
+            self.df_master, self.df_stock, self.df_outbound = tm, ts, to
             
             # Spara och beräkna
-            data = {'master': tm, 'stock': ts, 'outbound': to, 'inbound': ti}
+            data = {'master': tm, 'stock': ts, 'outbound': to}
             pd.to_pickle(data, DATABAS_FIL)
             
             self.berakna_data()
@@ -460,14 +446,7 @@ class LagerAppV4:
                     out_sum = self.df_outbound.groupby('SK Number')[q_col].sum().reset_index()
                     out_sum.rename(columns={q_col: 'Total_Outbound'}, inplace=True)
 
-            # 2. Inbound Sum (NYTT)
-            in_sum = pd.DataFrame(columns=['SK Number', 'Total_Inbound'])
-            if self.df_inbound is not None:
-                # Gissar att Inbound har liknande kvantitet-kolumn
-                q_col_in = next((c for c in self.df_inbound.columns if 'Qty' in c or 'Quantity' in c), None)
-                if q_col_in:
-                    in_sum = self.df_inbound.groupby('SK Number')[q_col_in].sum().reset_index()
-                    in_sum.rename(columns={q_col_in: 'Total_Inbound'}, inplace=True)
+            # (Inbound removed) 
 
             # 3. Masterdata prep
             self.df_master['SK Number'] = self.df_master['SK Number'].astype(str).str.strip()
@@ -478,25 +457,22 @@ class LagerAppV4:
             # 4. Merge Allt
             self.df_stock['SK Number'] = self.df_stock['SK Number'].astype(str).str.strip()
             out_sum['SK Number'] = out_sum['SK Number'].astype(str).str.strip()
-            in_sum['SK Number'] = in_sum['SK Number'].astype(str).str.strip()
 
             merged = pd.merge(self.df_master[['SK Number', 'GP Number', 'ITEM DESCRIPTION', 'ITEM STATUS']], 
                               self.df_stock[['SK Number', 'Current Stock']], 
                               on='SK Number', how='left')
             
             merged = pd.merge(merged, out_sum, on='SK Number', how='left')
-            merged = pd.merge(merged, in_sum, on='SK Number', how='left') # Merge Inbound
 
             # Fyll tomma
             merged['Current Stock'] = merged['Current Stock'].fillna(0)
             merged['Total_Outbound'] = merged['Total_Outbound'].fillna(0)
-            merged['Total_Inbound'] = merged['Total_Inbound'].fillna(0)
             merged['GP Number'] = merged['GP Number'].fillna("")
             merged['ITEM STATUS'] = merged['ITEM STATUS'].fillna("Unknown")
 
             # 5. Regler
             merged['Is_Deadstock'] = (merged['Current Stock'] > 0) & (merged['Total_Outbound'] == 0)
-            merged['Is_Overstock'] = (merged['Current Stock'] > (merged['Total_Outbound'] * 3)) & (merged['Total_Outbound'] > 0)
+            merged['Is_Overstock'] = (merged['Total_Outbound'] > 0) & (merged['Current Stock'] > (merged['Total_Outbound'] * 3))
 
             self.df_combined = merged
             
