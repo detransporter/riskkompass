@@ -192,7 +192,7 @@ class LagerAppV4:
         table_frame = tk.Frame(self.main_area, bg="white")
         table_frame.pack(fill="both", expand=True, padx=20, pady=(0, 20))
 
-        cols = ("SK Number", "GP Number", "Beskrivning", "Item Status", "Lager", "Utflöde", "Inbound", "Status")
+        cols = ("SK Number", "GP Number", "Description", "Item Status", "Stock", "Outbound", "Inbound", "Status")
         
         scrollbar = ttk.Scrollbar(table_frame, orient="vertical")
         self.tree = ttk.Treeview(table_frame, columns=cols, show="headings", yscrollcommand=scrollbar.set)
@@ -202,10 +202,10 @@ class LagerAppV4:
         # Kolumninställningar
         self.tree.column("SK Number", width=90, anchor="center")
         self.tree.column("GP Number", width=90, anchor="center")
-        self.tree.column("Beskrivning", width=300, anchor="w")
+        self.tree.column("Description", width=300, anchor="w")
         self.tree.column("Item Status", width=100, anchor="center")
-        self.tree.column("Lager", width=80, anchor="center")
-        self.tree.column("Utflöde", width=80, anchor="center")
+        self.tree.column("Stock", width=80, anchor="center")
+        self.tree.column("Outbound", width=80, anchor="center")
         self.tree.column("Inbound", width=80, anchor="center") # NY KOLUMN
         self.tree.column("Status", width=100, anchor="center")
 
