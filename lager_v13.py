@@ -647,7 +647,7 @@ class LagerAppV12:
         try:
             # Robust detection: SKU, date and qty columns (case-insensitive)
             sku_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['sk ', 'sku', 'item', 'article'])), None)
-            date_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['date', 'confirmed', 'delivery', 'orderdate'])), None)
+            date_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['originaldeliverydate', 'deliverydate', 'delivery', 'date', 'confirmed', 'orderdate'])), None)
             qty_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['qty', 'quantity', 'unit', 'units', 'amount'])), None)
 
             if not sku_col or not date_col or not qty_col:
