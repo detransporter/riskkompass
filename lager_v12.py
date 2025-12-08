@@ -367,7 +367,7 @@ class LagerAppV12:
             try:
                 # Export only matching columns from the dataframe
                 # Always include core columns if they exist
-                core_cols = ['SK Number', 'GP Number', 'ITEM DESCRIPTION', 'ITEM STATUS', 'Current Stock', 'Total_Outbound']
+                core_cols = ['SK Number', 'GP Number', 'ITEM DESCRIPTION', 'ITEM STATUS', 'Current Stock', 'Nr. of pallets', 'Total_Outbound']
                 ex = [c for c in core_cols if c in self.current_view_df.columns]
                 
                 # Export the filtered dataframe
