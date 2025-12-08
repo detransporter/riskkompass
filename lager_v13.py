@@ -105,14 +105,29 @@ class LagerAppV12:
             # 1. OUTBOUND & INBOUND
             out_sum = pd.DataFrame(columns=['SK Number', 'Total_Outbound'])
             if self.df_outbound is not None:
-                q = next((c for c in self.df_outbound.columns if 'Qty' in c or 'Quantity' in c), None)
-                if q: out_sum = self.df_outbound.groupby('SK Number')[q].sum().reset_index().rename(columns={q: 'Total_Outbound'})
-            
+                # Detect SKU and quantity columns robustly (case-insensitive)
+                sku_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['sk ', 'sku', 'item', 'article'])), None)
+                qty_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['qty', 'quantity', 'unit', 'units', 'amount'])), None)
+                if sku_col and qty_col:
+                    df_o = self.df_outbound.copy()
+                    # Normalize SKU column name to 'SK Number' if necessary
+                    if sku_col != 'SK Number':
+                        try:
+                            df_o.rename(columns={sku_col: 'SK Number'}, inplace=True)
+                        except Exception:
+                            pass
+                    try:
+                        out_sum = df_o.groupby('SK Number')[qty_col].sum().reset_index().rename(columns={qty_col: 'Total_Outbound'})
+                    except Exception:
+                        out_sum = pd.DataFrame(columns=['SK Number', 'Total_Outbound'])
             in_sum = pd.DataFrame(columns=['SK Number', 'Total_Inbound'])
             if self.df_inbound is not None:
                 q = next((c for c in self.df_inbound.columns if 'Qty' in c or 'Quantity' in c), None)
-                if q: in_sum = self.df_inbound.groupby('SK Number')[q].sum().reset_index().rename(columns={q: 'Total_Inbound'})
-
+                if q:
+                    try:
+                        in_sum = self.df_inbound.groupby('SK Number')[q].sum().reset_index().rename(columns={q: 'Total_Inbound'})
+                    except Exception:
+                        in_sum = pd.DataFrame(columns=['SK Number', 'Total_Inbound'])
             # 2. STANDARDISERA ID
             self.df_master['SK Number'] = self.df_master['SK Number'].astype(str).str.strip()
             self.df_stock['SK Number'] = self.df_stock['SK Number'].astype(str).str.strip()
@@ -632,7 +647,7 @@ class LagerAppV12:
         try:
             # Robust detection: SKU, date and qty columns (case-insensitive)
             sku_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['sk ', 'sku', 'item', 'article'])), None)
-            date_col = next((c for c in self.df_outbound.columns if 'date' in c.lower()), None)
+            date_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['date', 'confirmed', 'delivery', 'orderdate'])), None)
             qty_col = next((c for c in self.df_outbound.columns if any(k in c.lower() for k in ['qty', 'quantity', 'unit', 'units', 'amount'])), None)
 
             if not sku_col or not date_col or not qty_col:
