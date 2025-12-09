@@ -102,6 +102,22 @@ class LagerAppV16:
     def berakna_data(self, visa_popup=True):
         if self.df_stock is None: return
         try:
+            # 0. CHECK IF STOCK IS METADATA-ONLY (Field/Value format) - if so, reconstruct from Master
+            if self.df_stock is not None and set(self.df_stock.columns) == {'Field', 'Value'}:
+                print("WARNING: Stock file contains only metadata (Field/Value format). Reconstructing from Master...")
+                # Create a default Stock table from Master with zero stock
+                if self.df_master is not None:
+                    self.df_stock = pd.DataFrame({
+                        'SK Number': self.df_master['SK Number'].unique(),
+                        'Current Stock': 0,
+                        'Nr. of pallets': 0
+                    })
+                    print(f"Reconstructed Stock table with {len(self.df_stock)} items (all with 0 stock).")
+                else:
+                    print("ERROR: Cannot reconstruct Stock without Master data.")
+                    if visa_popup: messagebox.showerror("Error", "Stock data is invalid and Master data missing.")
+                    return
+            
             # 1. OUTBOUND - EXAKT MATCHNING
             out_sum = pd.DataFrame(columns=['SK Number', 'Total_Outbound'])
             if self.df_outbound is not None:
