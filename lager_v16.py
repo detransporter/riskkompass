@@ -458,7 +458,14 @@ class LagerAppV16:
     def uppdatera_tabell(self, vy_typ, search_text):
         self.tree.delete(*self.tree.get_children())
         df = self.current_view_df
-        if df is None or df.empty: return
+        if df is None or df.empty: 
+            print(f"ERROR: current_view_df is None or empty. vy_typ={vy_typ}")
+            return
+
+        # Ensure Stock_PCS exists (fallback if not calculated)
+        if 'Stock_PCS' not in df.columns:
+            print("WARNING: Stock_PCS not found in df. Creating fallback...")
+            df['Stock_PCS'] = df.get('Current Stock', 0)
 
         # Om vi är i Consumption view, sortera på utflöde
         if vy_typ == "consumption":
@@ -479,6 +486,7 @@ class LagerAppV16:
         mask_supp = df['Supplier'].astype(str).isin(sel_supp) if sel_supp else True
 
         final_df = df[mask_text & mask_stat & mask_supp]
+        print(f"uppdatera_tabell({vy_typ}): {len(final_df)} rows to display")
 
         if vy_typ == "deadstock" and self.lbl_summary is not None:
             sum_val = final_df['Inventory_Value'].sum()
@@ -486,24 +494,30 @@ class LagerAppV16:
             self.lbl_summary.config(text=f"DISCONTINUED SUMMARY | Items: {len(final_df)} | Val: {sum_val:,.0f} kr | Rent: {sum_rent:,.0f} kr/mo".replace(",", " "))
 
         for _, row in final_df.iterrows():
-            sk = row['SK Number']; gp = row['GP Number']; desc = row['ITEM DESCRIPTION']; curr_stock_pcs = int(row['Stock_PCS']); pallets = float(row['Nr. of pallets'])
-            
-            if vy_typ == "consumption":
-                vals = (sk, gp, desc, row['Supplier'], row['ITEM STATUS'], curr_stock_pcs, int(row['Total_Outbound']))
-            elif vy_typ == "all":
-                vals = (sk, gp, desc, row['Supplier'], curr_stock_pcs, f"{pallets:.1f}", int(row['MASTER VENDOR LEADTIME']))
-            elif vy_typ == "deadstock":
-                val = f"{row['Inventory_Value']:,.0f} kr".replace(",", " "); storage = f"{row['Storage_Cost_Month']:,.0f} kr".replace(",", " ")
-                vals = (sk, gp, desc, row['ITEM STATUS'], curr_stock_pcs, f"{pallets:.1f}", val, storage, int(row['Total_Inbound']))
-            else:
-                stat = "OK"
-                if row['Is_Overstock']: stat = "OVERSTOCK"
-                elif row['Is_Deadstock']: stat = "DEADSTOCK"
-                val = f"{row['Inventory_Value']:,.0f} kr".replace(",", " ")
-                curr_stock_pcs = int(row['Stock_PCS'])
-                vals = (sk, gp, desc, row['Supplier'], curr_stock_pcs, f"{pallets:.1f}", val, stat)
+            try:
+                sk = row['SK Number']; gp = row['GP Number']; desc = row['ITEM DESCRIPTION']; curr_stock_pcs = int(row['Stock_PCS']); pallets = float(row['Nr. of pallets'])
                 
-            self.tree.insert("", "end", values=vals)
+                if vy_typ == "consumption":
+                    vals = (sk, gp, desc, row['Supplier'], row['ITEM STATUS'], curr_stock_pcs, int(row['Total_Outbound']))
+                elif vy_typ == "all":
+                    vals = (sk, gp, desc, row['Supplier'], curr_stock_pcs, f"{pallets:.1f}", int(row['MASTER VENDOR LEADTIME']))
+                elif vy_typ == "deadstock":
+                    val = f"{row['Inventory_Value']:,.0f} kr".replace(",", " "); storage = f"{row['Storage_Cost_Month']:,.0f} kr".replace(",", " ")
+                    vals = (sk, gp, desc, row['ITEM STATUS'], curr_stock_pcs, f"{pallets:.1f}", val, storage, int(row['Total_Inbound']))
+                else:
+                    stat = "OK"
+                    if row['Is_Overstock']: stat = "OVERSTOCK"
+                    elif row['Is_Deadstock']: stat = "DEADSTOCK"
+                    val = f"{row['Inventory_Value']:,.0f} kr".replace(",", " ")
+                    curr_stock_pcs = int(row['Stock_PCS'])
+                    vals = (sk, gp, desc, row['Supplier'], curr_stock_pcs, f"{pallets:.1f}", val, stat)
+                
+                self.tree.insert("", "end", values=vals)
+            except Exception as e:
+                print(f"ERROR in row insert: {e}")
+                print(f"  Row columns: {row.index.tolist()}")
+                import traceback
+                traceback.print_exc()
 
     def exportera_lista(self, vy_typ):
         if self.current_view_df is None or self.current_view_df.empty: return
