@@ -1,0 +1,39 @@
+# Secrets & credentials
+.env
+*.env
+
+# Outlook token & import cache (generated at runtime)
+memory/.outlook_token.json
+memory/.outlook_imported.json
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.venv/
+venv/
+env/
+
+# Data files (may contain client data)
+*.parquet
+*.csv
+*.xlsx
+*.xls
+*.xml
+*.db
+*.docx
+
+# Excel lock files (skapas när fil är öppen)
+~$*
+
+# PDF-rapporter (genereras vid körning)
+*.pdf
+
+# Arkiv och lokala arbetsfiler
+Archive/
+memory/
+n.r
+
+# OS
+.DS_Store
+Thumbs.db
