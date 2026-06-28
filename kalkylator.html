@@ -1,0 +1,475 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lagerkalkylator — Barisab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* ── PAGE HEADER ── */
+  .page-header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--steel) 100%);
+    padding: 9rem 4rem 5rem;
+    position: relative; overflow: hidden;
+  }
+  .page-header::before {
+    content: '';
+    position: absolute; top: -150px; right: -150px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(42,125,212,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .page-header-inner { max-width: 680px; }
+  .page-header .hero-eyebrow {
+    color: var(--accent-light);
+    background: rgba(74,154,232,0.15);
+  }
+  .page-header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    line-height: 1.1; letter-spacing: -0.02em;
+    color: white; margin-bottom: 1.2rem;
+  }
+  .page-header h1 em { font-style: italic; color: var(--accent-light); }
+  .page-header p {
+    font-size: 1.05rem; line-height: 1.7;
+    color: rgba(255,255,255,0.65);
+    max-width: 540px; font-weight: 300;
+  }
+
+  /* ── CALCULATOR SECTION ── */
+  .calc-section { padding: 5rem 4rem; background: var(--warm); }
+  .calc-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 3rem; max-width: 1100px; margin: 0 auto; align-items: start;
+  }
+
+  /* ── FORM PANEL ── */
+  .calc-form-panel {
+    background: white; border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(13,27,42,0.08); padding: 2.5rem;
+    animation: fadeInUp 0.6s ease both;
+  }
+  .form-panel-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem; color: var(--navy); margin-bottom: 0.4rem;
+  }
+  .form-panel-sub {
+    font-size: 0.875rem; color: var(--muted);
+    margin-bottom: 2rem; font-weight: 300; line-height: 1.5;
+  }
+  .form-group { margin-bottom: 1.8rem; }
+  .form-group:last-of-type { margin-bottom: 0; }
+  .form-label {
+    display: flex; justify-content: space-between; align-items: baseline;
+    margin-bottom: 0.5rem;
+  }
+  .form-label label { font-size: 0.875rem; font-weight: 500; color: var(--navy); }
+  .form-label .label-value {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.1rem; color: var(--accent);
+  }
+  input[type="range"] {
+    width: 100%; -webkit-appearance: none;
+    height: 4px; border-radius: 2px;
+    background: var(--ice); outline: none; margin-bottom: 0.5rem;
+  }
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    width: 20px; height: 20px; border-radius: 50%;
+    background: var(--accent); cursor: pointer;
+    box-shadow: 0 2px 8px rgba(42,125,212,0.3); transition: box-shadow 0.2s;
+  }
+  input[type="range"]::-webkit-slider-thumb:hover {
+    box-shadow: 0 2px 14px rgba(42,125,212,0.5);
+  }
+  .range-labels {
+    display: flex; justify-content: space-between;
+    font-size: 0.75rem; color: var(--muted);
+  }
+  .select-group {
+    border: 1.5px solid var(--border); border-radius: 8px;
+    overflow: hidden; transition: border-color 0.2s;
+  }
+  .select-group:focus-within { border-color: var(--accent); }
+  .select-group select {
+    width: 100%; padding: 0.8rem 1rem; border: none; outline: none;
+    font-family: 'DM Sans', sans-serif; font-size: 0.9rem; color: var(--navy);
+    background: white; cursor: pointer; appearance: none;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='8' viewBox='0 0 12 8'%3E%3Cpath d='M1 1l5 5 5-5' stroke='%235A7080' stroke-width='1.5' fill='none' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 1rem center; padding-right: 2.5rem;
+  }
+
+  /* ── RESULT PANEL ── */
+  .calc-result-panel { position: sticky; top: 6rem; animation: fadeInUp 0.6s ease 0.15s both; }
+  .result-card {
+    background: white; border-radius: 16px;
+    box-shadow: 0 8px 32px rgba(13,27,42,0.08); padding: 2.5rem; margin-bottom: 1.5rem;
+  }
+  .result-card-title {
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 0.12em; text-transform: uppercase;
+    color: var(--muted); margin-bottom: 1.5rem;
+  }
+  .result-main-value {
+    text-align: center; padding: 1.5rem;
+    background: linear-gradient(135deg, var(--navy) 0%, var(--steel) 100%);
+    border-radius: 12px; margin-bottom: 1.5rem;
+  }
+  .result-main-label {
+    font-size: 0.8rem; font-weight: 500; letter-spacing: 0.08em; text-transform: uppercase;
+    color: rgba(255,255,255,0.55); margin-bottom: 0.5rem;
+  }
+  .result-main-number {
+    font-family: 'DM Serif Display', serif;
+    font-size: 2.4rem; color: white; line-height: 1; display: block; transition: all 0.4s ease;
+  }
+  .result-sub-label { font-size: 0.75rem; color: rgba(255,255,255,0.45); margin-top: 0.35rem; }
+  .result-metrics { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; margin-bottom: 1.5rem; }
+  .result-metric { padding: 1rem; border-radius: 10px; text-align: center; }
+  .result-metric.inventory { background: var(--ice); }
+  .result-metric.dead      { background: #FFEBEE; }
+  .result-metric.slow      { background: #FFF8E1; }
+  .result-metric.carry     { background: rgba(42,125,212,0.07); }
+  .result-metric-val {
+    font-family: 'DM Serif Display', serif; font-size: 1.3rem; display: block;
+    margin-bottom: 0.25rem; transition: all 0.4s ease;
+  }
+  .result-metric.inventory .result-metric-val { color: var(--navy); }
+  .result-metric.dead .result-metric-val      { color: #C62828; }
+  .result-metric.slow .result-metric-val      { color: #E65100; }
+  .result-metric.carry .result-metric-val     { color: var(--accent); }
+  .result-metric-label {
+    font-size: 0.7rem; font-weight: 500; letter-spacing: 0.05em; text-transform: uppercase; color: var(--muted);
+  }
+  .result-bar-section { margin-bottom: 1.5rem; }
+  .result-bar-title { font-size: 0.8rem; font-weight: 500; color: var(--muted); margin-bottom: 0.75rem; }
+  .result-bar-item { display: flex; align-items: center; gap: 0.75rem; margin-bottom: 0.5rem; }
+  .result-bar-label { font-size: 0.78rem; color: var(--muted); min-width: 110px; }
+  .result-bar-track { flex: 1; height: 8px; background: var(--ice); border-radius: 4px; overflow: hidden; }
+  .result-bar-fill { height: 100%; border-radius: 4px; transition: width 0.6s ease; }
+  .result-bar-fill.good { background: var(--accent); }
+  .result-bar-fill.dead { background: #EF5350; }
+  .result-bar-fill.slow { background: #FFA726; }
+  .result-bar-pct { font-size: 0.75rem; font-weight: 600; color: var(--navy); min-width: 36px; text-align: right; }
+  .result-disclaimer {
+    font-size: 0.78rem; color: var(--muted); line-height: 1.5; font-style: italic;
+    padding-top: 1rem; border-top: 1px solid var(--border);
+  }
+  .result-cta-card { background: var(--navy); border-radius: 16px; padding: 2rem; }
+  .result-cta-card h3 {
+    font-family: 'DM Serif Display', serif; font-size: 1.3rem; color: white;
+    margin-bottom: 0.75rem; line-height: 1.2;
+  }
+  .result-cta-card p {
+    font-size: 0.875rem; color: rgba(255,255,255,0.6); line-height: 1.6; margin-bottom: 1.5rem; font-weight: 300;
+  }
+  .result-cta-card .founder-note { background: rgba(42,125,212,0.15); color: var(--accent-light); }
+
+  /* ── METHODOLOGY ── */
+  .methodology { background: white; padding: 5rem 4rem; }
+  .methodology-inner { max-width: 1100px; margin: 0 auto; }
+  .method-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.5rem; }
+  .method-card { background: var(--ice); border-radius: 12px; padding: 1.75rem; }
+  .method-num {
+    font-family: 'DM Serif Display', serif; font-size: 2rem; color: var(--accent);
+    display: block; margin-bottom: 0.75rem; line-height: 1;
+  }
+  .method-card h4 { font-family: 'DM Serif Display', serif; font-size: 1.05rem; color: var(--navy); margin-bottom: 0.5rem; }
+  .method-card p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+  /* ── BOTTOM CTA ── */
+  .cta-section { background: var(--navy); padding: 6rem 4rem; text-align: center; }
+  .cta-section .section-title { color: white; margin: 0 auto 1rem; }
+  .cta-section .section-sub { color: rgba(255,255,255,0.6); margin: 0 auto 2.5rem; }
+  .cta-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .cta-note { margin-top: 1.5rem; font-size: 0.8rem; color: rgba(255,255,255,0.3); }
+  .founder-cta-note {
+    display: inline-block; margin-top: 1rem;
+    background: rgba(42,125,212,0.2); border-radius: 6px; padding: 0.5rem 1rem;
+    font-size: 0.82rem; color: var(--accent-light); font-weight: 500;
+  }
+
+  /* ── RESPONSIV ── */
+  @media (max-width: 900px) {
+    .page-header { padding: 7rem 1.5rem 3.5rem; }
+    .calc-section { padding: 3rem 1.5rem; }
+    .calc-grid { grid-template-columns: 1fr; gap: 2rem; }
+    .calc-result-panel { position: static; }
+    .methodology { padding: 3.5rem 1.5rem; }
+    .method-grid { grid-template-columns: 1fr; }
+    .cta-section { padding: 4rem 1.5rem; }
+    .result-metrics { grid-template-columns: 1fr 1fr; }
+  }
+  @media (max-width: 480px) {
+    .result-metrics { grid-template-columns: 1fr; }
+    .result-main-number { font-size: 1.8rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">bari<span>sab</span></a>
+  <div class="nav-right">
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('sv')" id="btn-sv">SV</button>
+      <button class="lang-btn" onclick="setLang('en')" id="btn-en">EN</button>
+    </div>
+    <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="nav-cta" data-sv="Boka demo" data-en="Book demo">Boka demo</a>
+  </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <span class="hero-eyebrow" data-sv="Lagerkalkylator" data-en="Inventory calculator">Lagerkalkylator</span>
+    <h1 data-sv="Hur mycket kapital har du bundet i <em>onödigt</em> lager?" data-en="How much capital do you have tied up in <em>unnecessary</em> inventory?">Hur mycket kapital har du bundet i <em>onödigt</em> lager?</h1>
+    <p data-sv="Ange ditt artikelantal och omsättning — vi räknar ut en uppskattning baserad på branschdata och 20 års erfarenhet av nordiska lager." data-en="Enter your SKU count and revenue — we calculate an estimate based on industry benchmarks and 20 years of experience with Nordic inventories.">Ange ditt artikelantal och omsättning — vi räknar ut en uppskattning baserad på branschdata och 20 års erfarenhet av nordiska lager.</p>
+  </div>
+</header>
+
+<!-- CALCULATOR -->
+<section class="calc-section">
+  <div class="calc-grid">
+
+    <!-- FORM PANEL -->
+    <div class="calc-form-panel">
+      <h2 class="form-panel-title" data-sv="Berätta om ditt lager" data-en="Tell us about your inventory">Berätta om ditt lager</h2>
+      <p class="form-panel-sub" data-sv="Justera sliders — resultatet uppdateras direkt." data-en="Adjust the sliders — results update instantly.">Justera sliders — resultatet uppdateras direkt.</p>
+
+      <div class="form-group">
+        <div class="form-label">
+          <label data-sv="Antal artiklar (SKU)" data-en="Number of SKUs">Antal artiklar (SKU)</label>
+          <span class="label-value" id="sku-display">500</span>
+        </div>
+        <input type="range" id="sku-slider" min="50" max="5000" step="50" value="500" oninput="syncSku(this.value); calculate()">
+        <div class="range-labels">
+          <span>50</span>
+          <span data-sv="5 000 SKU" data-en="5,000 SKUs">5 000 SKU</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">
+          <label data-sv="Ungefärlig omsättning" data-en="Approximate annual revenue">Ungefärlig omsättning</label>
+          <span class="label-value" id="rev-display">100 MSEK</span>
+        </div>
+        <input type="range" id="rev-slider" min="10" max="500" step="5" value="100" oninput="syncRev(this.value); calculate()">
+        <div class="range-labels">
+          <span>10 MSEK</span>
+          <span>500 MSEK</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <div class="form-label">
+          <label data-sv="Bransch" data-en="Industry">Bransch</label>
+        </div>
+        <div class="select-group">
+          <select id="industry-select" onchange="calculate()">
+            <option value="manufacturing" data-sv="Tillverkning" data-en="Manufacturing">Tillverkning</option>
+            <option value="distribution" data-sv="Distribution / Grossist" data-en="Distribution / Wholesale">Distribution / Grossist</option>
+            <option value="retail" data-sv="Handel / Detaljist" data-en="Retail / Trade">Handel / Detaljist</option>
+          </select>
+        </div>
+      </div>
+
+      <div style="margin-top:1.75rem; padding:1rem 1.2rem; background:var(--ice); border-radius:8px; font-size:0.8rem; color:var(--muted); line-height:1.5;">
+        <strong style="color:var(--navy);font-weight:600;" data-sv="Hur räknar vi?" data-en="How do we calculate?">Hur räknar vi?</strong><br>
+        <span data-sv="Lagervärde beräknas som andel av omsättning (branschspecifikt). Döda och tröga artiklar beräknas utifrån antal SKU och branschgenomsnitt. Kapitalkostnad 22%/år." data-en="Inventory value is calculated as a share of revenue (industry-specific). Dead and slow-moving items are estimated based on SKU count and industry averages. Carrying cost 22%/year.">Lagervärde beräknas som andel av omsättning (branschspecifikt). Döda och tröga artiklar beräknas utifrån antal SKU och branschgenomsnitt. Kapitalkostnad 22%/år.</span>
+      </div>
+    </div>
+
+    <!-- RESULT PANEL -->
+    <div class="calc-result-panel">
+      <div class="result-card">
+        <div class="result-card-title" data-sv="Din uppskattning" data-en="Your estimate">Din uppskattning</div>
+
+        <div class="result-main-value">
+          <div class="result-main-label" data-sv="Onödigt bundet kapital" data-en="Unnecessarily tied-up capital">Onödigt bundet kapital</div>
+          <span class="result-main-number" id="result-total">–</span>
+          <div class="result-sub-label" data-sv="uppskattning baserad på branschdata" data-en="estimate based on industry data">uppskattning baserad på branschdata</div>
+        </div>
+
+        <div class="result-metrics">
+          <div class="result-metric inventory">
+            <span class="result-metric-val" id="result-inventory">–</span>
+            <span class="result-metric-label" data-sv="Totalt lagervärde" data-en="Total inventory value">Totalt lagervärde</span>
+          </div>
+          <div class="result-metric dead">
+            <span class="result-metric-val" id="result-dead">–</span>
+            <span class="result-metric-label" data-sv="Döda artiklar" data-en="Dead stock">Döda artiklar</span>
+          </div>
+          <div class="result-metric slow">
+            <span class="result-metric-val" id="result-slow">–</span>
+            <span class="result-metric-label" data-sv="Tröga artiklar" data-en="Slow movers">Tröga artiklar</span>
+          </div>
+          <div class="result-metric carry">
+            <span class="result-metric-val" id="result-carry">–</span>
+            <span class="result-metric-label" data-sv="Kapitalkostnad/år" data-en="Carrying cost/yr">Kapitalkostnad/år</span>
+          </div>
+        </div>
+
+        <div class="result-bar-section">
+          <div class="result-bar-title" data-sv="Fördelning av lagervärde" data-en="Inventory value breakdown">Fördelning av lagervärde</div>
+          <div class="result-bar-item">
+            <span class="result-bar-label" data-sv="Rörliga artiklar" data-en="Active stock">Rörliga artiklar</span>
+            <div class="result-bar-track"><div class="result-bar-fill good" id="bar-good" style="width:65%"></div></div>
+            <span class="result-bar-pct" id="bar-good-pct">65%</span>
+          </div>
+          <div class="result-bar-item">
+            <span class="result-bar-label" data-sv="Tröga artiklar" data-en="Slow movers">Tröga artiklar</span>
+            <div class="result-bar-track"><div class="result-bar-fill slow" id="bar-slow" style="width:21%"></div></div>
+            <span class="result-bar-pct" id="bar-slow-pct">21%</span>
+          </div>
+          <div class="result-bar-item">
+            <span class="result-bar-label" data-sv="Döda artiklar" data-en="Dead stock">Döda artiklar</span>
+            <div class="result-bar-track"><div class="result-bar-fill dead" id="bar-dead" style="width:14%"></div></div>
+            <span class="result-bar-pct" id="bar-dead-pct">14%</span>
+          </div>
+        </div>
+
+        <div class="result-disclaimer" data-sv="Det här är en uppskattning baserad på branschgenomsnitt för nordiska SME. Det faktiska beloppet för ditt lager kan vara lägre eller högre — det exakta svaret kräver en analys av din faktiska data." data-en="This is an estimate based on Nordic SME industry averages. The actual figure for your inventory may be lower or higher — the exact answer requires an analysis of your actual data.">Det här är en uppskattning baserad på branschgenomsnitt för nordiska SME. Det faktiska beloppet för ditt lager kan vara lägre eller högre — det exakta svaret kräver en analys av din faktiska data.</div>
+      </div>
+
+      <div class="result-cta-card">
+        <h3 data-sv="Vill du veta det exakta beloppet?" data-en="Want to know the exact figure?">Vill du veta det exakta beloppet?</h3>
+        <p data-sv="En kostnadsfri genomgång på 30 minuter ger dig en verklig bild av ditt lager — med faktiska SEK-värden från din data, inte branschsnitt." data-en="A free 30-minute review gives you a real picture of your inventory — with actual SEK values from your data, not industry averages.">En kostnadsfri genomgång på 30 minuter ger dig en verklig bild av ditt lager — med faktiska SEK-värden från din data, inte branschsnitt.</p>
+        <a href="https://iha-saas-dbjs4i4w48rg7cgc48zghs.streamlit.app/" target="_blank" rel="noopener" class="btn-accent" data-sv="Analysera ditt lager gratis i IHA →" data-en="Analyze your inventory free in IHA →">Analysera ditt lager gratis i IHA →</a>
+        <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="btn-outline-white" data-sv="Eller boka kostnadsfri genomgång" data-en="Or book a free review">Eller boka kostnadsfri genomgång</a>
+        <div class="founder-note" data-sv="✦ IHA: gratis provperiod, sedan Premium Core 199 €/mån eller Advance 399 €/mån. Konsulttjänsten Skillnad: Founder Rate 25 000 SEK för de 5 första kunderna." data-en="✦ IHA: free trial, then Premium Core €199/mo or Advance €399/mo. Skillnad consulting: Founder Rate 25,000 SEK for the first 5 clients.">✦ IHA: gratis provperiod, sedan Premium Core 199 €/mån eller Advance 399 €/mån. Konsulttjänsten Skillnad: Founder Rate 25 000 SEK för de 5 första kunderna.</div>
+      </div>
+    </div>
+
+  </div>
+</section>
+
+<!-- METHODOLOGY -->
+<section class="methodology">
+  <div class="methodology-inner">
+    <div class="section-label" data-sv="Bakgrunden till beräkningen" data-en="The calculation methodology">Bakgrunden till beräkningen</div>
+    <h2 class="section-title" data-sv="Siffrorna är inte påhittade" data-en="The numbers are not made up">Siffrorna är inte påhittade</h2>
+    <p class="section-sub" data-sv="Uppskattningen bygger på branschdata och erfarenhet från verkliga lageranalyser i Norden." data-en="The estimate is based on industry data and experience from real inventory analyses in the Nordics.">Uppskattningen bygger på branschdata och erfarenhet från verkliga lageranalyser i Norden.</p>
+    <div class="method-grid">
+      <div class="method-card">
+        <span class="method-num">15–22%</span>
+        <h4 data-sv="Lager som andel av omsättning" data-en="Inventory as share of revenue">Lager som andel av omsättning</h4>
+        <p data-sv="Nordiska SME-tillverkare håller i genomsnitt 20–22% av omsättningen i lager. Distributörer något lägre, runt 16–18%." data-en="Nordic SME manufacturers hold an average of 20–22% of revenue in inventory. Distributors somewhat lower, around 16–18%.">Nordiska SME-tillverkare håller i genomsnitt 20–22% av omsättningen i lager. Distributörer något lägre, runt 16–18%.</p>
+      </div>
+      <div class="method-card">
+        <span class="method-num">10–23%</span>
+        <h4 data-sv="Döda artiklar av lagervärdet" data-en="Dead stock of inventory value">Döda artiklar av lagervärdet</h4>
+        <p data-sv="Andelen ökar kraftigt med antal SKU. Fler artiklar = fler glömda positioner. Vår referensbas: 18+ MSEK dödt lager i ett enskilt uppdrag." data-en="The share increases sharply with SKU count. More items = more forgotten positions. Our reference: 18+ MSEK dead stock in a single assignment.">Andelen ökar kraftigt med antal SKU. Fler artiklar = fler glömda positioner. Vår referensbas: 18+ MSEK dödt lager i ett enskilt uppdrag.</p>
+      </div>
+      <div class="method-card">
+        <span class="method-num">22%</span>
+        <h4 data-sv="Kapitalkostnad per år" data-en="Carrying cost per year">Kapitalkostnad per år</h4>
+        <p data-sv="Inkluderar: bundet kapital (8%), lagerhyra och hantering (8%), inkuransrisk (6%). Varje krona i onödigt lager kostar dig 22 öre per år." data-en="Includes: tied-up capital (8%), warehouse rent and handling (8%), obsolescence risk (6%). Every krona in unnecessary inventory costs you 22 öre per year.">Inkluderar: bundet kapital (8%), lagerhyra och hantering (8%), inkuransrisk (6%). Varje krona i onödigt lager kostar dig 22 öre per år.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<section class="cta-section">
+  <h2 class="section-title" data-sv="Redo att se det exakta beloppet?" data-en="Ready to see the exact figure?">Redo att se det exakta beloppet?</h2>
+  <p class="section-sub" data-sv="En kostnadsfri genomgång på 30 minuter. Du exporterar din lagerdata, vi analyserar och visar vad som faktiskt är bundet — utan vaga procentsatser." data-en="A free 30-minute review. You export your inventory data, we analyze and show what is actually tied up — without vague percentages.">En kostnadsfri genomgång på 30 minuter. Du exporterar din lagerdata, vi analyserar och visar vad som faktiskt är bundet — utan vaga procentsatser.</p>
+  <div class="cta-actions">
+    <a href="https://iha-saas-dbjs4i4w48rg7cgc48zghs.streamlit.app/" target="_blank" rel="noopener" class="btn-primary" data-sv="Analysera ditt lager gratis i IHA" data-en="Analyze your inventory free in IHA">Analysera ditt lager gratis i IHA</a>
+    <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="btn-ghost" data-sv="Eller boka kostnadsfri genomgång" data-en="Or book a free review">Eller boka kostnadsfri genomgång</a>
+  </div>
+  <div class="founder-cta-note" data-sv="✦ IHA: gratis provperiod, sedan 199 €/mån (Core) eller 399 €/mån (Advance). Konsulttjänst: Founder Rate 25 000 SEK för de fem första kunderna." data-en="✦ IHA: free trial, then €199/mo (Core) or €399/mo (Advance). Consulting: Founder Rate 25,000 SEK for the first five clients.">✦ IHA: gratis provperiod, sedan 199 €/mån (Core) eller 399 €/mån (Advance). Konsulttjänst: Founder Rate 25 000 SEK för de fem första kunderna.</div>
+  <p class="cta-note" data-sv="Ingen förpliktelse. Inga förberedelser behövs." data-en="No obligation. No preparation needed.">Ingen förpliktelse. Inga förberedelser behövs.</p>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">bari<span>sab</span></div>
+  <p data-sv="© 2026 Barisab / SCM International. David Leifsson." data-en="© 2026 Barisab / SCM International. David Leifsson.">© 2026 Barisab / SCM International. David Leifsson.</p>
+  <p><a href="mailto:david.leifsson@barisab.com" style="color:rgba(255,255,255,0.4);text-decoration:none">david.leifsson@barisab.com</a></p>
+</footer>
+
+<script>
+  let currentLang = 'sv';
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.getElementById('btn-sv').classList.toggle('active', lang === 'sv');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+    document.querySelectorAll('[data-sv]').forEach(el => {
+      const txt = el.getAttribute('data-' + lang);
+      if (!txt) return;
+      if (el.tagName === 'H1') { el.innerHTML = txt; }
+      else { el.textContent = txt; }
+    });
+    document.querySelectorAll('#industry-select option').forEach(opt => {
+      const txt = opt.getAttribute('data-' + lang);
+      if (txt) opt.textContent = txt;
+    });
+  }
+
+  function syncSku(val) {
+    document.getElementById('sku-display').textContent = parseInt(val).toLocaleString('sv-SE');
+  }
+  function syncRev(val) {
+    document.getElementById('rev-display').textContent = parseInt(val).toLocaleString('sv-SE') + ' MSEK';
+  }
+
+  function formatSEK(value) {
+    if (value >= 1_000_000) {
+      return (value / 1_000_000).toLocaleString('sv-SE', { minimumFractionDigits: 1, maximumFractionDigits: 1 }) + ' MSEK';
+    }
+    return Math.round(value).toLocaleString('sv-SE') + ' SEK';
+  }
+
+  const INDUSTRY_RATIOS = { manufacturing: 0.22, distribution: 0.18, retail: 0.15 };
+
+  function getDeadPct(skus) {
+    if (skus < 200)  return 0.10;
+    if (skus < 500)  return 0.13;
+    if (skus < 1000) return 0.16;
+    if (skus < 2000) return 0.19;
+    return 0.23;
+  }
+
+  function calculate() {
+    const skus     = parseInt(document.getElementById('sku-slider').value);
+    const revMSEK  = parseInt(document.getElementById('rev-slider').value);
+    const industry = document.getElementById('industry-select').value;
+
+    const inventoryValue = revMSEK * 1_000_000 * INDUSTRY_RATIOS[industry];
+    const deadPct  = getDeadPct(skus);
+    const slowPct  = deadPct * 1.55;
+    const goodPct  = 1 - deadPct - slowPct;
+
+    const deadValue  = inventoryValue * deadPct;
+    const slowValue  = inventoryValue * slowPct;
+    const tiedUp     = deadValue + slowValue;
+    const carryValue = tiedUp * 0.22;
+
+    document.getElementById('result-total').textContent      = formatSEK(tiedUp);
+    document.getElementById('result-inventory').textContent  = formatSEK(inventoryValue);
+    document.getElementById('result-dead').textContent       = formatSEK(deadValue);
+    document.getElementById('result-slow').textContent       = formatSEK(slowValue);
+    document.getElementById('result-carry').textContent      = formatSEK(carryValue);
+
+    const deadPct2 = Math.round(deadPct * 100);
+    const slowPct2 = Math.round(slowPct * 100);
+    const goodPct2 = 100 - deadPct2 - slowPct2;
+
+    document.getElementById('bar-good').style.width  = goodPct2 + '%';
+    document.getElementById('bar-slow').style.width  = slowPct2 + '%';
+    document.getElementById('bar-dead').style.width  = deadPct2 + '%';
+    document.getElementById('bar-good-pct').textContent = goodPct2 + '%';
+    document.getElementById('bar-slow-pct').textContent = slowPct2 + '%';
+    document.getElementById('bar-dead-pct').textContent = deadPct2 + '%';
+  }
+
+  calculate();
+</script>
+</body>
+</html>

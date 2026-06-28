@@ -1,0 +1,641 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Referensuppdrag: SAS Inflight Logistics — Barisab</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* ── PAGE HEADER ── */
+  .page-header {
+    background: linear-gradient(135deg, var(--navy) 0%, var(--steel) 100%);
+    padding: 9rem 4rem 5rem;
+    position: relative; overflow: hidden;
+  }
+  .page-header::before {
+    content: '';
+    position: absolute; top: -150px; right: -150px;
+    width: 500px; height: 500px;
+    background: radial-gradient(circle, rgba(42,125,212,0.15) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .page-header-inner { max-width: 780px; }
+  .page-header .hero-eyebrow {
+    color: var(--accent-light);
+    background: rgba(74,154,232,0.15);
+  }
+  .page-header h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2rem, 4vw, 3.2rem);
+    line-height: 1.1; letter-spacing: -0.02em;
+    color: white; margin-bottom: 1.2rem;
+  }
+  .page-header h1 em { font-style: italic; color: var(--accent-light); }
+  .page-header p {
+    font-size: 1.05rem; line-height: 1.7;
+    color: rgba(255,255,255,0.65); max-width: 580px; font-weight: 300;
+    margin-bottom: 2.5rem;
+  }
+
+  /* ── META ROW ── */
+  .meta-row {
+    display: flex; gap: 2rem; flex-wrap: wrap;
+  }
+  .meta-pill {
+    display: flex; align-items: center; gap: 0.5rem;
+    background: rgba(255,255,255,0.08);
+    border: 1px solid rgba(255,255,255,0.12);
+    border-radius: 6px; padding: 0.45rem 0.9rem;
+  }
+  .meta-pill-label {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.1em;
+    text-transform: uppercase; color: rgba(255,255,255,0.45);
+  }
+  .meta-pill-val {
+    font-size: 0.85rem; font-weight: 500; color: rgba(255,255,255,0.85);
+  }
+
+  /* ── STATS SECTION ── */
+  .stats-section { background: var(--ice); padding: 5rem 4rem; }
+  .stats-inner { max-width: 1100px; margin: 0 auto; }
+  .stats-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; }
+  .stat-card {
+    background: white; border-radius: 16px;
+    box-shadow: 0 4px 20px rgba(13,27,42,0.07);
+    padding: 2.5rem 2rem; text-align: center;
+    animation: fadeInUp 0.6s ease both;
+  }
+  .stat-card:nth-child(2) { animation-delay: 0.1s; }
+  .stat-card:nth-child(3) { animation-delay: 0.2s; }
+  .stat-num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 3.5rem; line-height: 1; color: var(--navy);
+    display: block; margin-bottom: 0.5rem;
+  }
+  .stat-num span { color: var(--accent); }
+  .stat-label {
+    font-size: 0.875rem; color: var(--muted); line-height: 1.5;
+  }
+  .stat-divider {
+    width: 32px; height: 2px; background: var(--accent);
+    margin: 1rem auto; border-radius: 1px;
+  }
+
+  /* ── STORY SECTION COMMONS ── */
+  .story-section { padding: 5rem 4rem; }
+  .story-inner { max-width: 1100px; margin: 0 auto; }
+  .story-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 5rem; align-items: center;
+  }
+  .story-grid.reverse { direction: rtl; }
+  .story-grid.reverse > * { direction: ltr; }
+  .story-text h2 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(1.6rem, 2.5vw, 2.2rem);
+    line-height: 1.15; letter-spacing: -0.02em;
+    color: var(--navy); margin-bottom: 1.2rem;
+  }
+  .story-text p {
+    font-size: 1rem; line-height: 1.8; color: var(--muted);
+    font-weight: 300; margin-bottom: 1rem;
+  }
+  .story-text p:last-child { margin-bottom: 0; }
+
+  /* ── BACKGROUND SECTION ── */
+  .background-section { background: white; }
+  .context-card {
+    background: var(--ice); border-radius: 14px; padding: 2rem;
+  }
+  .context-row {
+    display: flex; align-items: flex-start; gap: 1rem;
+    padding: 1rem 0; border-bottom: 1px solid var(--border);
+  }
+  .context-row:last-child { border-bottom: none; padding-bottom: 0; }
+  .context-icon { font-size: 1.3rem; flex-shrink: 0; margin-top: 0.1rem; }
+  .context-row h4 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem; color: var(--navy); margin-bottom: 0.25rem;
+  }
+  .context-row p { font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
+
+  /* ── CHALLENGE SECTION (dark) ── */
+  .challenge-section { background: var(--navy); }
+  .challenge-section .section-label { color: rgba(255,255,255,0.5); }
+  .challenge-section .story-text h2 { color: white; }
+  .challenge-section .story-text p   { color: rgba(255,255,255,0.6); }
+  .problem-cards { display: flex; flex-direction: column; gap: 1rem; }
+  .problem-card-cs {
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px; padding: 1.5rem;
+    display: flex; gap: 1rem; align-items: flex-start;
+    transition: background 0.2s;
+  }
+  .problem-card-cs:hover { background: rgba(255,255,255,0.08); }
+  .problem-num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem; color: rgba(42,125,212,0.5);
+    flex-shrink: 0; line-height: 1;
+  }
+  .problem-card-cs h4 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem; color: white; margin-bottom: 0.4rem;
+  }
+  .problem-card-cs p { font-size: 0.875rem; color: rgba(255,255,255,0.55); line-height: 1.5; }
+
+  /* ── ANALYSIS SECTION ── */
+  .analysis-section { background: var(--warm); }
+  .steps-cs { display: flex; flex-direction: column; gap: 0; }
+  .step-cs {
+    display: flex; gap: 1.5rem; align-items: flex-start;
+    padding: 1.25rem 0;
+    border-bottom: 1px solid var(--border);
+    position: relative;
+  }
+  .step-cs:last-child { border-bottom: none; }
+  .step-cs-num {
+    width: 42px; height: 42px; flex-shrink: 0;
+    background: var(--navy); color: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Serif Display', serif; font-size: 1.1rem;
+  }
+  .step-cs-content h4 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem; color: var(--navy); margin-bottom: 0.3rem;
+  }
+  .step-cs-content p { font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
+
+  .tool-highlight {
+    background: white; border-radius: 14px;
+    padding: 2rem;
+    box-shadow: 0 4px 20px rgba(13,27,42,0.08);
+  }
+  .tool-highlight-label {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.12em;
+    text-transform: uppercase; color: var(--accent); margin-bottom: 1rem;
+  }
+  .tool-highlight h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.3rem; color: var(--navy); margin-bottom: 0.75rem;
+  }
+  .tool-highlight p {
+    font-size: 0.875rem; color: var(--muted); line-height: 1.6; margin-bottom: 1.2rem;
+  }
+  .tool-metric-row {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;
+  }
+  .tool-metric {
+    background: var(--ice); border-radius: 10px; padding: 1rem; text-align: center;
+  }
+  .tool-metric-val {
+    font-family: 'DM Serif Display', serif; font-size: 1.4rem; color: var(--navy); display: block; margin-bottom: 0.2rem;
+  }
+  .tool-metric-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted); font-weight: 500; }
+  .tool-metric-val.green { color: #2E7D32; }
+
+  /* ── RESULTS SECTION ── */
+  .results-section { background: var(--ice); padding: 5rem 4rem; }
+  .results-inner { max-width: 1100px; margin: 0 auto; }
+  .results-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 3rem; margin-top: 3rem; align-items: start; }
+  .result-items { display: flex; flex-direction: column; gap: 1.5rem; }
+  .result-item {
+    background: white; border-radius: 14px;
+    padding: 1.75rem;
+    box-shadow: 0 2px 12px rgba(13,27,42,0.06);
+    display: flex; gap: 1.5rem; align-items: flex-start;
+  }
+  .result-item-stat {
+    flex-shrink: 0; text-align: center; min-width: 80px;
+  }
+  .result-item-num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.6rem; color: var(--navy); display: block; line-height: 1;
+  }
+  .result-item-num.accent { color: var(--accent); }
+  .result-item-num.green  { color: #2E7D32; }
+  .result-item-unit { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; font-weight: 500; }
+  .result-item-text h4 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem; color: var(--navy); margin-bottom: 0.35rem;
+  }
+  .result-item-text p { font-size: 0.875rem; color: var(--muted); line-height: 1.5; }
+
+  /* Big impact callout */
+  .impact-callout {
+    background: var(--navy); border-radius: 16px; padding: 2.5rem;
+    color: white; position: sticky; top: 6rem;
+  }
+  .impact-callout-label {
+    font-size: 0.7rem; font-weight: 600; letter-spacing: 0.15em;
+    text-transform: uppercase; color: var(--accent-light); margin-bottom: 1.5rem;
+  }
+  .impact-main {
+    font-family: 'DM Serif Display', serif;
+    font-size: 4rem; line-height: 1; color: white; margin-bottom: 0.25rem;
+  }
+  .impact-main span { color: var(--accent-light); }
+  .impact-main-label { font-size: 0.9rem; color: rgba(255,255,255,0.55); margin-bottom: 2rem; }
+  .impact-divider { height: 1px; background: rgba(255,255,255,0.1); margin-bottom: 1.5rem; }
+  .impact-sub { display: flex; flex-direction: column; gap: 1.2rem; }
+  .impact-sub-item { display: flex; gap: 1rem; align-items: center; }
+  .impact-sub-num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.6rem; color: white; flex-shrink: 0; min-width: 60px; line-height: 1;
+  }
+  .impact-sub-num span { color: var(--accent-light); font-size: 1rem; }
+  .impact-sub-text { font-size: 0.875rem; color: rgba(255,255,255,0.55); line-height: 1.4; }
+
+  /* ── QUOTE ── */
+  .quote-section { background: white; padding: 5rem 4rem; }
+  .quote-inner { max-width: 800px; margin: 0 auto; text-align: center; }
+  .quote-mark {
+    font-family: 'DM Serif Display', serif;
+    font-size: 5rem; color: var(--ice); line-height: 0.8;
+    margin-bottom: 1rem; display: block;
+  }
+  .quote-text {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(1.2rem, 2vw, 1.6rem);
+    line-height: 1.5; color: var(--navy);
+    font-style: italic; margin-bottom: 2rem;
+  }
+  .quote-source {
+    display: flex; align-items: center; justify-content: center; gap: 1rem;
+  }
+  .quote-line { width: 32px; height: 1px; background: var(--accent); }
+  .quote-cite { font-size: 0.875rem; color: var(--muted); font-weight: 500; }
+
+  /* ── CTA SECTION ── */
+  .cta-section { background: var(--navy); padding: 6rem 4rem; text-align: center; }
+  .cta-section .section-title { color: white; margin: 0 auto 1rem; }
+  .cta-section .section-sub { color: rgba(255,255,255,0.6); margin: 0 auto 2.5rem; }
+  .cta-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+  .cta-note { margin-top: 1.5rem; font-size: 0.8rem; color: rgba(255,255,255,0.3); }
+  .founder-cta-note {
+    display: inline-block; margin-top: 1rem;
+    background: rgba(42,125,212,0.2); border-radius: 6px; padding: 0.5rem 1rem;
+    font-size: 0.82rem; color: var(--accent-light); font-weight: 500;
+  }
+
+  /* ── RESPONSIV ── */
+  @media (max-width: 900px) {
+    .page-header { padding: 7rem 1.5rem 3.5rem; }
+    .meta-row { gap: 0.75rem; }
+    .stats-section, .story-section, .results-section, .quote-section, .cta-section { padding: 3.5rem 1.5rem; }
+    .stats-grid { grid-template-columns: 1fr; gap: 1rem; }
+    .story-grid { grid-template-columns: 1fr; gap: 2.5rem; }
+    .story-grid.reverse { direction: ltr; }
+    .results-grid { grid-template-columns: 1fr; }
+    .impact-callout { position: static; }
+    .tool-metric-row { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">bari<span>sab</span></a>
+  <div class="nav-right">
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('sv')" id="btn-sv">SV</button>
+      <button class="lang-btn" onclick="setLang('en')" id="btn-en">EN</button>
+    </div>
+    <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="nav-cta" data-sv="Boka demo" data-en="Book demo">Boka demo</a>
+  </div>
+</nav>
+
+<!-- PAGE HEADER -->
+<header class="page-header">
+  <div class="page-header-inner">
+    <span class="hero-eyebrow" data-sv="Referensuppdrag" data-en="Case study">Referensuppdrag</span>
+    <h1 data-sv="Hur 18 MSEK dödt lager hittades i en nordisk <em>flygoperatör</em>" data-en="How 18 MSEK in dead stock was found at a Nordic <em>airline operator</em>">Hur 18 MSEK dödt lager hittades i en nordisk <em>flygoperatör</em></h1>
+    <p data-sv="SAS Inflight Logistics hanterade lager för 1 847 artiklar utan strukturerad klassificering. Inget system identifierade döda positioner — förrän vi klev in." data-en="SAS Inflight Logistics managed inventory for 1,847 items without structured classification. No system identified dead positions — until we stepped in.">SAS Inflight Logistics hanterade lager för 1 847 artiklar utan strukturerad klassificering. Inget system identifierade döda positioner — förrän vi klev in.</p>
+    <div class="meta-row">
+      <div class="meta-pill">
+        <span class="meta-pill-label" data-sv="Bransch" data-en="Industry">Bransch</span>
+        <span class="meta-pill-val" data-sv="Aviation / Inflight Catering" data-en="Aviation / Inflight Catering">Aviation / Inflight Catering</span>
+      </div>
+      <div class="meta-pill">
+        <span class="meta-pill-label" data-sv="Artiklar" data-en="SKUs">Artiklar</span>
+        <span class="meta-pill-val">1 847 SKU</span>
+      </div>
+      <div class="meta-pill">
+        <span class="meta-pill-label" data-sv="Längd" data-en="Duration">Längd</span>
+        <span class="meta-pill-val" data-sv="4 veckor" data-en="4 weeks">4 veckor</span>
+      </div>
+      <div class="meta-pill">
+        <span class="meta-pill-label" data-sv="Leverans" data-en="Deliverable">Leverans</span>
+        <span class="meta-pill-val" data-sv="ABC + NPI-verktyg" data-en="ABC + NPI tool">ABC + NPI-verktyg</span>
+      </div>
+    </div>
+  </div>
+</header>
+
+<!-- STATS -->
+<section class="stats-section">
+  <div class="stats-inner">
+    <div class="stats-grid">
+      <div class="stat-card">
+        <span class="stat-num">18<span>+</span></span>
+        <div class="stat-divider"></div>
+        <p class="stat-label" data-sv="MSEK dödt lager identifierat och kvantifierat — med artikel för artikel, SEK för SEK" data-en="MSEK dead stock identified and quantified — item by item, SEK by SEK">MSEK dödt lager identifierat och kvantifierat — med artikel för artikel, SEK för SEK</p>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">1 847</span>
+        <div class="stat-divider"></div>
+        <p class="stat-label" data-sv="Artiklar ABC-klassificerade och analyserade för rörelse, inkurans och inköpsmönster" data-en="SKUs ABC-classified and analyzed for movement, obsolescence and purchasing patterns">Artiklar ABC-klassificerade och analyserade för rörelse, inkurans och inköpsmönster</p>
+      </div>
+      <div class="stat-card">
+        <span class="stat-num">2–3 <span style="font-size:2rem">tim</span></span>
+        <div class="stat-divider"></div>
+        <p class="stat-label" data-sv="Per dag sparade — NPI-godkännandeprocessen automatiserades från manuell hantering till under 15 minuter" data-en="Per day saved — the NPI approval process was automated from manual handling to under 15 minutes">Per dag sparade — NPI-godkännandeprocessen automatiserades från manuell hantering till under 15 minuter</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- BACKGROUND -->
+<section class="story-section background-section">
+  <div class="story-inner">
+    <div class="story-grid">
+      <div class="story-text">
+        <div class="section-label" data-sv="Bakgrunden" data-en="Background">Bakgrunden</div>
+        <h2 data-sv="En komplex lagermiljö med 1 847 aktiva artiklar" data-en="A complex inventory environment with 1,847 active items">En komplex lagermiljö med 1 847 aktiva artiklar</h2>
+        <p data-sv="SAS Inflight Logistics ansvarade för lagerhantering av allt material som används ombord på SAS-flyg — från portionsförpackningar och serviceartiklar till teknisk utrustning och säkerhetsmaterial." data-en="SAS Inflight Logistics was responsible for inventory management of all materials used onboard SAS flights — from portion packs and service items to technical equipment and safety materials.">SAS Inflight Logistics ansvarade för lagerhantering av allt material som används ombord på SAS-flyg — från portionsförpackningar och serviceartiklar till teknisk utrustning och säkerhetsmaterial.</p>
+        <p data-sv="Med 1 847 aktiva artiklar och löpande förändringar i meny, service och regelverk var lagerstyrningen komplex och resursintensiv. Utan strukturerad klassificering behandlades alla artiklar i praktiken lika — oavsett om de omsattes dagligen eller inte rört sig på ett år." data-en="With 1,847 active items and ongoing changes to menus, service and regulations, inventory management was complex and resource-intensive. Without structured classification, all items were treated equally in practice — whether they turned over daily or hadn't moved in a year.">Med 1 847 aktiva artiklar och löpande förändringar i meny, service och regelverk var lagerstyrningen komplex och resursintensiv. Utan strukturerad klassificering behandlades alla artiklar i praktiken lika — oavsett om de omsattes dagligen eller inte rört sig på ett år.</p>
+      </div>
+      <div>
+        <div class="context-card">
+          <div class="context-row">
+            <div class="context-icon">✈️</div>
+            <div>
+              <h4 data-sv="Inflight Catering & Logistics" data-en="Inflight Catering & Logistics">Inflight Catering & Logistics</h4>
+              <p data-sv="Lagerhantering för SAS ombordservice. Hög komplexitet, korta ledtider, strikta hygienkrav." data-en="Inventory management for SAS onboard service. High complexity, short lead times, strict hygiene requirements.">Lagerhantering för SAS ombordservice. Hög komplexitet, korta ledtider, strikta hygienkrav.</p>
+            </div>
+          </div>
+          <div class="context-row">
+            <div class="context-icon">📦</div>
+            <div>
+              <h4 data-sv="1 847 aktiva artiklar" data-en="1,847 active items">1 847 aktiva artiklar</h4>
+              <p data-sv="Blandning av förbrukningsvaror, serviceartiklar och teknisk utrustning med vitt skilda omsättningshastigheter." data-en="Mix of consumables, service items and technical equipment with widely varying turnover rates.">Blandning av förbrukningsvaror, serviceartiklar och teknisk utrustning med vitt skilda omsättningshastigheter.</p>
+            </div>
+          </div>
+          <div class="context-row">
+            <div class="context-icon">🔄</div>
+            <div>
+              <h4 data-sv="Löpande artikelförändringar (NPI)" data-en="Ongoing product changes (NPI)">Löpande artikelförändringar (NPI)</h4>
+              <p data-sv="Nya artiklar godkändes manuellt. Processen tog 2–3 timmar per dag utan stöd av digitalt verktyg." data-en="New items were approved manually. The process took 2–3 hours per day without digital tool support.">Nya artiklar godkändes manuellt. Processen tog 2–3 timmar per dag utan stöd av digitalt verktyg.</p>
+            </div>
+          </div>
+          <div class="context-row">
+            <div class="context-icon">📊</div>
+            <div>
+              <h4 data-sv="Ingen ABC-klassificering" data-en="No ABC classification">Ingen ABC-klassificering</h4>
+              <p data-sv="Alla artiklar behandlades lika i systemet. Ingen skillnad gjordes på volymvärde eller rörelsehastighet." data-en="All items were treated equally in the system. No distinction was made for volume value or movement speed.">Alla artiklar behandlades lika i systemet. Ingen skillnad gjordes på volymvärde eller rörelsehastighet.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- CHALLENGE -->
+<section class="story-section challenge-section">
+  <div class="story-inner">
+    <div class="story-grid reverse">
+      <div class="story-text">
+        <div class="section-label" data-sv="Utmaningen" data-en="The challenge">Utmaningen</div>
+        <h2 data-sv="Tre problem som kostade pengar varje dag" data-en="Three problems costing money every day">Tre problem som kostade pengar varje dag</h2>
+        <p data-sv="Utan strukturerad lageranalys var problemen osynliga. Man visste att det fanns problem — men inte var kapitalet låg bundet eller hur mycket." data-en="Without structured inventory analysis, the problems were invisible. They knew issues existed — but not where capital was tied up or how much.">Utan strukturerad lageranalys var problemen osynliga. Man visste att det fanns problem — men inte var kapitalet låg bundet eller hur mycket.</p>
+      </div>
+      <div class="problem-cards">
+        <div class="problem-card-cs">
+          <span class="problem-num">01</span>
+          <div>
+            <h4 data-sv="Döda artiklar var osynliga i systemet" data-en="Dead items were invisible in the system">Döda artiklar var osynliga i systemet</h4>
+            <p data-sv="Artiklar utan rörelse i 180+ dagar identifierades inte. De låg kvar i lager och belastar kapitalkostnaden utan att det noterades." data-en="Items with no movement for 180+ days were not identified. They remained in inventory, burdening carrying costs without anyone noticing.">Artiklar utan rörelse i 180+ dagar identifierades inte. De låg kvar i lager och belastar kapitalkostnaden utan att det noterades.</p>
+          </div>
+        </div>
+        <div class="problem-card-cs">
+          <span class="problem-num">02</span>
+          <div>
+            <h4 data-sv="NPI-godkännande tog 2–3 timmar om dagen" data-en="NPI approval took 2–3 hours per day">NPI-godkännande tog 2–3 timmar om dagen</h4>
+            <p data-sv="Varje ny artikel som skulle in i sortimentet godkändes manuellt. Data hämtades från flera källor, sammanställdes för hand och kontrollerades utan systemstöd." data-en="Each new item entering the assortment was approved manually. Data was fetched from multiple sources, compiled by hand and reviewed without system support.">Varje ny artikel som skulle in i sortimentet godkändes manuellt. Data hämtades från flera källor, sammanställdes för hand och kontrollerades utan systemstöd.</p>
+          </div>
+        </div>
+        <div class="problem-card-cs">
+          <span class="problem-num">03</span>
+          <div>
+            <h4 data-sv="Ingen prioritering — alla artiklar behandlades lika" data-en="No prioritization — all items treated equally">Ingen prioritering — alla artiklar behandlades lika</h4>
+            <p data-sv="Utan ABC-klassificering lades lika mycket tid på en C-artikel som sällan används som på en A-artikel som är kritisk för varje avgång. Resurser fördelades fel." data-en="Without ABC classification, as much time was spent on a rarely-used C-item as on an A-item critical for every departure. Resources were misallocated.">Utan ABC-klassificering lades lika mycket tid på en C-artikel som sällan används som på en A-artikel som är kritisk för varje avgång. Resurser fördelades fel.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ANALYSIS -->
+<section class="story-section analysis-section">
+  <div class="story-inner">
+    <div class="story-grid">
+      <div class="story-text">
+        <div class="section-label" data-sv="Vad vi gjorde" data-en="What we did">Vad vi gjorde</div>
+        <h2 data-sv="Fyra insatser på fyra veckor" data-en="Four actions in four weeks">Fyra insatser på fyra veckor</h2>
+        <p data-sv="Analysen kördes på exporterad lagerdata — inga systemintegrationer, inga långa uppstarter. CSV-filer från befintligt ERP räckte." data-en="The analysis was run on exported inventory data — no system integrations, no long ramp-ups. CSV files from the existing ERP were sufficient.">Analysen kördes på exporterad lagerdata — inga systemintegrationer, inga långa uppstarter. CSV-filer från befintligt ERP räckte.</p>
+        <div class="steps-cs">
+          <div class="step-cs">
+            <div class="step-cs-num">1</div>
+            <div class="step-cs-content">
+              <h4 data-sv="Dataexport och rensning" data-en="Data export and cleaning">Dataexport och rensning</h4>
+              <p data-sv="Lagerdata exporterades från befintligt system. Datakvaliteten granskades: dubbletter, saknade kostnadsvärden och inkonsekventa artikelnummer identifierades och åtgärdades." data-en="Inventory data was exported from the existing system. Data quality was reviewed: duplicates, missing cost values and inconsistent SKU numbers were identified and resolved.">Lagerdata exporterades från befintligt system. Datakvaliteten granskades: dubbletter, saknade kostnadsvärden och inkonsekventa artikelnummer identifierades och åtgärdades.</p>
+            </div>
+          </div>
+          <div class="step-cs">
+            <div class="step-cs-num">2</div>
+            <div class="step-cs-content">
+              <h4 data-sv="ABC-klassificering av samtliga 1 847 artiklar" data-en="ABC classification of all 1,847 items">ABC-klassificering av samtliga 1 847 artiklar</h4>
+              <p data-sv="Varje artikel klassificerades efter volymvärde: A = top 80%, B = nästa 15%, C = sista 5%. Klassificeringen styrde sedan prioritering av analys och åtgärder." data-en="Each item was classified by volume value: A = top 80%, B = next 15%, C = bottom 5%. The classification then guided prioritization of analysis and actions.">Varje artikel klassificerades efter volymvärde: A = top 80%, B = nästa 15%, C = sista 5%. Klassificeringen styrde sedan prioritering av analys och åtgärder.</p>
+            </div>
+          </div>
+          <div class="step-cs">
+            <div class="step-cs-num">3</div>
+            <div class="step-cs-content">
+              <h4 data-sv="Identifiering av döda och tröga artiklar" data-en="Identification of dead and slow-moving items">Identifiering av döda och tröga artiklar</h4>
+              <p data-sv="Alla artiklar utan rörelse ≥180 dagar klassificerades som döda. 90–180 dagar som tröga. SEK-värdet per position beräknades och summerades per kategori." data-en="All items with no movement ≥180 days were classified as dead. 90–180 days as slow-moving. The SEK value per position was calculated and summed per category.">Alla artiklar utan rörelse ≥180 dagar klassificerades som döda. 90–180 dagar som tröga. SEK-värdet per position beräknades och summerades per kategori.</p>
+            </div>
+          </div>
+          <div class="step-cs">
+            <div class="step-cs-num">4</div>
+            <div class="step-cs-content">
+              <h4 data-sv="Byggt NPI-godkännandeverktyg i Streamlit" data-en="Built NPI approval tool in Streamlit">Byggt NPI-godkännandeverktyg i Streamlit</h4>
+              <p data-sv="En skräddarsydd Python/Streamlit-applikation som automatiserade datainsamlingen för nya artikelgodkännanden. Indata från ERP samlades automatiskt och presenterades i ett standardiserat format." data-en="A custom Python/Streamlit application that automated data collection for new item approvals. Input from ERP was collected automatically and presented in a standardized format.">En skräddarsydd Python/Streamlit-applikation som automatiserade datainsamlingen för nya artikelgodkännanden. Indata från ERP samlades automatiskt och presenterades i ett standardiserat format.</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div>
+        <div class="tool-highlight">
+          <div class="tool-highlight-label" data-sv="Det byggda verktyget" data-en="The built tool">Det byggda verktyget</div>
+          <h3 data-sv="NPI-godkännandeverktyg" data-en="NPI Approval Tool">NPI-godkännandeverktyg</h3>
+          <p data-sv="En Streamlit-applikation byggd specifikt för SAS Inflight-processen. Operatören importerar en artikelförteckning, systemet hämtar och validerar data, och presenterar ett komplett beslutsunderlag." data-en="A Streamlit application built specifically for the SAS Inflight process. The operator imports an item list, the system fetches and validates data, and presents a complete decision basis.">En Streamlit-applikation byggd specifikt för SAS Inflight-processen. Operatören importerar en artikelförteckning, systemet hämtar och validerar data, och presenterar ett komplett beslutsunderlag.</p>
+          <div class="tool-metric-row">
+            <div class="tool-metric">
+              <span class="tool-metric-val">2–3 tim</span>
+              <span class="tool-metric-label" data-sv="Tidigare per dag" data-en="Previously per day">Tidigare per dag</span>
+            </div>
+            <div class="tool-metric">
+              <span class="tool-metric-val green">&lt;15 min</span>
+              <span class="tool-metric-label" data-sv="Med verktyget" data-en="With the tool">Med verktyget</span>
+            </div>
+          </div>
+          <div style="margin-top:1.2rem; padding-top:1.2rem; border-top:1px solid var(--border);">
+            <div style="font-size:0.78rem;color:var(--muted);margin-bottom:0.5rem;" data-sv="Teknisk stack" data-en="Tech stack">Teknisk stack</div>
+            <div style="display:flex;gap:0.5rem;flex-wrap:wrap;">
+              <span style="background:var(--ice);border-radius:4px;padding:0.25rem 0.6rem;font-size:0.78rem;color:var(--navy);font-weight:500;">Python</span>
+              <span style="background:var(--ice);border-radius:4px;padding:0.25rem 0.6rem;font-size:0.78rem;color:var(--navy);font-weight:500;">Streamlit</span>
+              <span style="background:var(--ice);border-radius:4px;padding:0.25rem 0.6rem;font-size:0.78rem;color:var(--navy);font-weight:500;">Pandas</span>
+              <span style="background:var(--ice);border-radius:4px;padding:0.25rem 0.6rem;font-size:0.78rem;color:var(--navy);font-weight:500;">Excel-export</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULTS -->
+<section class="results-section">
+  <div class="results-inner">
+    <div class="section-label" data-sv="Resultaten" data-en="The results">Resultaten</div>
+    <h2 class="section-title" data-sv="Konkreta SEK-belopp, inte procentsatser" data-en="Concrete SEK amounts, not percentages">Konkreta SEK-belopp, inte procentsatser</h2>
+    <div class="results-grid">
+      <div class="result-items">
+        <div class="result-item">
+          <div class="result-item-stat">
+            <span class="result-item-num accent">18<span style="font-size:1.1rem">+</span></span>
+            <span class="result-item-unit">MSEK</span>
+          </div>
+          <div class="result-item-text">
+            <h4 data-sv="Dödt lager identifierat och kvantifierat" data-en="Dead stock identified and quantified">Dödt lager identifierat och kvantifierat</h4>
+            <p data-sv="Varje position med SEK-värde. Prioriterat per artikelklass (A/B/C) för maximal effekt vid avveckling." data-en="Each position with SEK value. Prioritized by item class (A/B/C) for maximum effect when liquidating.">Varje position med SEK-värde. Prioriterat per artikelklass (A/B/C) för maximal effekt vid avveckling.</p>
+          </div>
+        </div>
+        <div class="result-item">
+          <div class="result-item-stat">
+            <span class="result-item-num green">&lt;15</span>
+            <span class="result-item-unit" data-sv="min/dag" data-en="min/day">min/dag</span>
+          </div>
+          <div class="result-item-text">
+            <h4 data-sv="NPI-godkännandetid efter automatisering" data-en="NPI approval time after automation">NPI-godkännandetid efter automatisering</h4>
+            <p data-sv="Från 2–3 timmar manuellt arbete per dag till under 15 minuter. Frigör tid för strategiska uppgifter." data-en="From 2–3 hours of manual work per day to under 15 minutes. Frees up time for strategic tasks.">Från 2–3 timmar manuellt arbete per dag till under 15 minuter. Frigör tid för strategiska uppgifter.</p>
+          </div>
+        </div>
+        <div class="result-item">
+          <div class="result-item-stat">
+            <span class="result-item-num">1 847</span>
+            <span class="result-item-unit">SKU</span>
+          </div>
+          <div class="result-item-text">
+            <h4 data-sv="Strukturerad ABC-databas levererad" data-en="Structured ABC database delivered">Strukturerad ABC-databas levererad</h4>
+            <p data-sv="En Excel-baserad databas med ABC-klass, rörelsehistorik och prioritering för samtliga artiklar. Direkt användbar för fortlöpande inköpsarbete." data-en="An Excel-based database with ABC class, movement history and prioritization for all items. Directly usable for ongoing purchasing work.">En Excel-baserad databas med ABC-klass, rörelsehistorik och prioritering för samtliga artiklar. Direkt användbar för fortlöpande inköpsarbete.</p>
+          </div>
+        </div>
+        <div class="result-item">
+          <div class="result-item-stat">
+            <span class="result-item-num">V1</span>
+            <span class="result-item-unit" data-sv="åtgärdsplan" data-en="action plan">åtgärdsplan</span>
+          </div>
+          <div class="result-item-text">
+            <h4 data-sv="Prioriterad avvecklingsplan levererad" data-en="Prioritized liquidation plan delivered">Prioriterad avvecklingsplan levererad</h4>
+            <p data-sv="Konkret lista: vad som avvecklas vecka 1, månad 1, kvartal 1. Inga vaga rekommendationer — specifika artiklar med SEK-potential per åtgärd." data-en="Concrete list: what is liquidated in week 1, month 1, quarter 1. No vague recommendations — specific items with SEK potential per action.">Konkret lista: vad som avvecklas vecka 1, månad 1, kvartal 1. Inga vaga rekommendationer — specifika artiklar med SEK-potential per åtgärd.</p>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="impact-callout">
+          <div class="impact-callout-label" data-sv="Sammanfattning av impact" data-en="Impact summary">Sammanfattning av impact</div>
+          <div class="impact-main">18<span>+</span></div>
+          <div class="impact-main-label" data-sv="MSEK frigjort kapital" data-en="MSEK released capital">MSEK frigjort kapital</div>
+          <div class="impact-divider"></div>
+          <div class="impact-sub">
+            <div class="impact-sub-item">
+              <span class="impact-sub-num">2–3 <span>tim</span></span>
+              <span class="impact-sub-text" data-sv="per dag sparade genom automatiserat NPI-flöde" data-en="per day saved through automated NPI workflow">per dag sparade genom automatiserat NPI-flöde</span>
+            </div>
+            <div class="impact-sub-item">
+              <span class="impact-sub-num">4 <span>v</span></span>
+              <span class="impact-sub-text" data-sv="från dataexport till levererad åtgärdsplan" data-en="from data export to delivered action plan">från dataexport till levererad åtgärdsplan</span>
+            </div>
+            <div class="impact-sub-item">
+              <span class="impact-sub-num">1 847</span>
+              <span class="impact-sub-text" data-sv="artiklar klassificerade och prioriterade" data-en="items classified and prioritized">artiklar klassificerade och prioriterade</span>
+            </div>
+            <div class="impact-sub-item">
+              <span class="impact-sub-num">0</span>
+              <span class="impact-sub-text" data-sv="systemintegrationer krävdes — bara CSV-export" data-en="system integrations required — just CSV export">systemintegrationer krävdes — bara CSV-export</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- QUOTE -->
+<section class="quote-section">
+  <div class="quote-inner">
+    <span class="quote-mark">"</span>
+    <p class="quote-text" data-sv="Analysen identifierade döda artiklar och ineffektiva inköpsflöden vi inte visste att vi hade. Det sparade oss både tid och kapital på ett sätt som Excel aldrig kunnat göra." data-en="The analysis identified dead items and inefficient purchasing flows we didn't know we had. It saved us both time and capital in a way Excel could never do.">Analysen identifierade döda artiklar och ineffektiva inköpsflöden vi inte visste att vi hade. Det sparade oss både tid och kapital på ett sätt som Excel aldrig kunnat göra.</p>
+    <div class="quote-source">
+      <div class="quote-line"></div>
+      <cite class="quote-cite" data-sv="Referensuppdrag, nordisk luftfart / inflight logistics" data-en="Reference assignment, Nordic aviation / inflight logistics">Referensuppdrag, nordisk luftfart / inflight logistics</cite>
+      <div class="quote-line"></div>
+    </div>
+  </div>
+</section>
+
+<!-- CTA -->
+<section class="cta-section">
+  <h2 class="section-title" data-sv="Vill du ha samma analys för ditt lager?" data-en="Want the same analysis for your inventory?">Vill du ha samma analys för ditt lager?</h2>
+  <p class="section-sub" data-sv="En kostnadsfri genomgång på 30 minuter. Du exporterar din lagerdata, vi berättar vad vi kan hitta — utan förpliktelse." data-en="A free 30-minute review. You export your inventory data, we tell you what we can find — no obligation.">En kostnadsfri genomgång på 30 minuter. Du exporterar din lagerdata, vi berättar vad vi kan hitta — utan förpliktelse.</p>
+  <div class="cta-actions">
+    <a href="https://iha-saas-dbjs4i4w48rg7cgc48zghs.streamlit.app/" target="_blank" rel="noopener" class="btn-primary" data-sv="Analysera ditt lager gratis i IHA" data-en="Analyze your inventory free in IHA">Analysera ditt lager gratis i IHA</a>
+    <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="btn-ghost" data-sv="Eller boka kostnadsfri genomgång" data-en="Or book a free review">Eller boka kostnadsfri genomgång</a>
+  </div>
+  <div class="founder-cta-note" data-sv="✦ IHA: gratis provperiod, sedan 199 €/mån (Core) eller 399 €/mån (Advance). Konsulttjänst: Founder Rate 25 000 SEK för de fem första kunderna." data-en="✦ IHA: free trial, then €199/mo (Core) or €399/mo (Advance). Consulting: Founder Rate 25,000 SEK for the first five clients.">✦ IHA: gratis provperiod, sedan 199 €/mån (Core) eller 399 €/mån (Advance). Konsulttjänst: Founder Rate 25 000 SEK för de fem första kunderna.</div>
+  <p class="cta-note" data-sv="Ingen förpliktelse. 30 minuter. Konkreta svar." data-en="No obligation. 30 minutes. Concrete answers.">Ingen förpliktelse. 30 minuter. Konkreta svar.</p>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">bari<span>sab</span></div>
+  <p data-sv="© 2026 Barisab / SCM International. David Leifsson." data-en="© 2026 Barisab / SCM International. David Leifsson.">© 2026 Barisab / SCM International. David Leifsson.</p>
+  <p><a href="mailto:david.leifsson@barisab.com" style="color:rgba(255,255,255,0.4);text-decoration:none">david.leifsson@barisab.com</a></p>
+</footer>
+
+<script>
+  let currentLang = 'sv';
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.getElementById('btn-sv').classList.toggle('active', lang === 'sv');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+    document.querySelectorAll('[data-sv]').forEach(el => {
+      const txt = el.getAttribute('data-' + lang);
+      if (!txt) return;
+      if (el.tagName === 'H1') { el.innerHTML = txt; }
+      else { el.textContent = txt; }
+    });
+  }
+</script>
+</body>
+</html>

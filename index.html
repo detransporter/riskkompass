@@ -1,0 +1,642 @@
+<!DOCTYPE html>
+<html lang="sv">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Barisab — Lageroptimering för nordiska SME</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="css/style.css">
+<style>
+  /* ── HERO ── */
+  .hero {
+    min-height: 100vh;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    align-items: center;
+    padding: 8rem 4rem 4rem;
+    gap: 4rem;
+    background: linear-gradient(135deg, var(--white) 0%, var(--ice) 100%);
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: '';
+    position: absolute; top: -200px; right: -200px;
+    width: 600px; height: 600px;
+    background: radial-gradient(circle, rgba(42,125,212,0.08) 0%, transparent 70%);
+    pointer-events: none;
+  }
+  .hero h1 {
+    font-family: 'DM Serif Display', serif;
+    font-size: clamp(2.4rem, 4vw, 3.6rem);
+    line-height: 1.1;
+    letter-spacing: -0.02em;
+    color: var(--navy);
+    margin-bottom: 1.5rem;
+  }
+  .hero h1 em { font-style: italic; color: var(--accent); }
+  .hero-sub {
+    font-size: 1.1rem;
+    line-height: 1.7;
+    color: var(--muted);
+    max-width: 480px;
+    margin-bottom: 2.5rem;
+    font-weight: 300;
+  }
+  .hero-actions { display: flex; gap: 1rem; flex-wrap: wrap; }
+
+  /* hero visual */
+  .hero-visual {
+    position: relative;
+    animation: fadeInUp 0.8s ease 0.3s both;
+  }
+  .dashboard-card {
+    background: white;
+    border-radius: 16px;
+    box-shadow: 0 20px 60px rgba(13,27,42,0.12), 0 4px 16px rgba(13,27,42,0.06);
+    padding: 2rem;
+    position: relative;
+  }
+  .card-header {
+    display: flex; align-items: center; justify-content: space-between;
+    margin-bottom: 1.5rem;
+  }
+  .card-title {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1rem;
+    color: var(--navy);
+  }
+  .metric-row {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 1rem; margin-bottom: 1.5rem;
+  }
+  .metric {
+    background: var(--ice);
+    border-radius: 10px;
+    padding: 1rem;
+    text-align: center;
+  }
+  .metric-val {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.6rem;
+    color: var(--navy);
+    display: block;
+  }
+  .metric-label {
+    font-size: 0.7rem; color: var(--muted);
+    font-weight: 500; letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+  .metric-val.red { color: #C62828; }
+  .metric-val.green { color: #2E7D32; }
+
+  .bar-list { display: flex; flex-direction: column; gap: 0.6rem; }
+  .bar-item { display: flex; align-items: center; gap: 0.8rem; }
+  .bar-label { font-size: 0.8rem; color: var(--muted); min-width: 80px; }
+  .bar-track {
+    flex: 1; height: 8px;
+    background: var(--ice); border-radius: 4px; overflow: hidden;
+  }
+  .bar-fill {
+    height: 100%; border-radius: 4px;
+    animation: barGrow 1.2s ease 0.8s both;
+  }
+  .bar-fill.a { background: var(--accent); width: 78%; }
+  .bar-fill.b { background: #5BA4CF; width: 15%; }
+  .bar-fill.c { background: #A8C4D8; width: 7%; }
+  .bar-pct { font-size: 0.75rem; font-weight: 600; color: var(--navy); min-width: 32px; text-align: right; }
+
+  .floating-badge {
+    position: absolute;
+    background: white;
+    border-radius: 10px;
+    box-shadow: 0 8px 24px rgba(13,27,42,0.12);
+    padding: 0.75rem 1rem;
+    display: flex; align-items: center; gap: 0.6rem;
+    font-size: 0.8rem; font-weight: 500;
+    animation: float 3s ease-in-out infinite;
+  }
+  .floating-badge.top { top: -20px; right: 20px; color: #2E7D32; }
+  .floating-badge.bottom { bottom: -16px; left: 20px; color: var(--accent); }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot-green { background: #4CAF50; }
+  .dot-blue { background: var(--accent); }
+
+  /* ── PROBLEMS ── */
+  .problems { background: var(--navy); }
+  .problems .section-label { color: rgba(255,255,255,0.5); }
+  .problems .section-title { color: white; }
+  .problems .section-sub { color: rgba(255,255,255,0.6); }
+  .problem-grid {
+    display: grid; grid-template-columns: repeat(3, 1fr);
+    gap: 1.5rem; margin-top: 3rem;
+  }
+  .problem-card {
+    background: rgba(255,255,255,0.04);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 2rem;
+    transition: background 0.2s;
+  }
+  .problem-card:hover { background: rgba(255,255,255,0.07); }
+  .problem-icon { font-size: 2rem; margin-bottom: 1rem; }
+  .problem-card h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.2rem; color: white;
+    margin-bottom: 0.75rem;
+  }
+  .problem-card p { font-size: 0.9rem; color: rgba(255,255,255,0.55); line-height: 1.6; }
+
+  /* ── PRODUCTS ── */
+  .products { background: var(--warm); }
+  .product-tabs {
+    display: flex; gap: 0.5rem;
+    margin-bottom: 3rem; margin-top: 2.5rem;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 0;
+  }
+  .tab-btn {
+    padding: 0.75rem 1.5rem;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem; font-weight: 500;
+    cursor: pointer; border: none;
+    background: transparent;
+    color: var(--muted);
+    border-bottom: 2px solid transparent;
+    margin-bottom: -1px;
+    transition: all 0.2s;
+  }
+  .tab-btn.active {
+    color: var(--navy);
+    border-bottom-color: var(--accent);
+  }
+  .tab-content { display: none; }
+  .tab-content.active { display: grid; grid-template-columns: 1fr 1fr; gap: 4rem; align-items: start; }
+  .product-desc h3 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.8rem; color: var(--navy);
+    margin-bottom: 1rem;
+  }
+  .product-desc p { color: var(--muted); line-height: 1.7; margin-bottom: 1.5rem; font-weight: 300; }
+  .feature-list { list-style: none; display: flex; flex-direction: column; gap: 0.6rem; }
+  .feature-list li {
+    display: flex; align-items: flex-start; gap: 0.75rem;
+    font-size: 0.9rem; color: var(--text);
+  }
+  .feature-list li::before {
+    content: '✓';
+    color: var(--accent); font-weight: 700;
+    margin-top: 1px; flex-shrink: 0;
+  }
+  .product-price-card {
+    background: white;
+    border-radius: 14px;
+    box-shadow: 0 8px 32px rgba(13,27,42,0.08);
+    padding: 2rem;
+  }
+  .price-tier {
+    padding: 1.2rem;
+    border-radius: 10px;
+    margin-bottom: 1rem;
+    border: 1.5px solid var(--border);
+    cursor: pointer;
+    transition: all 0.2s;
+  }
+  .price-tier:hover { border-color: var(--accent); }
+  .price-tier.featured {
+    border-color: var(--accent);
+    background: rgba(42,125,212,0.04);
+  }
+  .tier-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.4rem; }
+  .tier-name { font-weight: 600; font-size: 0.9rem; color: var(--navy); }
+  .tier-price { font-family: 'DM Serif Display', serif; font-size: 1.2rem; color: var(--navy); }
+  .tier-price span { font-family: 'DM Sans', sans-serif; font-size: 0.75rem; color: var(--muted); }
+  .tier-desc { font-size: 0.8rem; color: var(--muted); }
+
+  /* ── HOW IT WORKS ── */
+  .how { background: white; }
+  .steps {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 2rem; margin-top: 3rem;
+    position: relative;
+  }
+  .steps::before {
+    content: '';
+    position: absolute;
+    top: 28px; left: 10%; right: 10%;
+    height: 1px;
+    background: repeating-linear-gradient(90deg, var(--accent) 0, var(--accent) 8px, transparent 8px, transparent 16px);
+    z-index: 0;
+  }
+  .step { text-align: center; position: relative; z-index: 1; }
+  .step-num {
+    width: 56px; height: 56px;
+    background: var(--navy);
+    color: white;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.4rem;
+    margin: 0 auto 1.2rem;
+    box-shadow: 0 4px 16px rgba(13,27,42,0.2);
+  }
+  .step h4 {
+    font-family: 'DM Serif Display', serif;
+    font-size: 1.05rem; color: var(--navy);
+    margin-bottom: 0.5rem;
+  }
+  .step p { font-size: 0.85rem; color: var(--muted); line-height: 1.6; }
+
+  /* ── SOCIAL PROOF ── */
+  .proof { background: var(--ice); }
+  .proof-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 2rem; margin-top: 3rem; }
+  .proof-stat {
+    text-align: center; padding: 2rem;
+    background: white; border-radius: 12px;
+    box-shadow: 0 2px 12px rgba(13,27,42,0.06);
+  }
+  .proof-stat .num {
+    font-family: 'DM Serif Display', serif;
+    font-size: 3rem; color: var(--navy);
+    display: block; line-height: 1;
+    margin-bottom: 0.5rem;
+  }
+  .proof-stat .num span { color: var(--accent); }
+  .proof-stat p { font-size: 0.9rem; color: var(--muted); }
+  .case-note {
+    background: white;
+    border-radius: 12px;
+    padding: 2rem;
+    margin-top: 2rem;
+    border-left: 4px solid var(--accent);
+    box-shadow: 0 2px 12px rgba(13,27,42,0.06);
+    max-width: 700px;
+  }
+  .case-note p {
+    font-size: 1rem; line-height: 1.7;
+    color: var(--text); font-style: italic;
+    margin-bottom: 0.75rem;
+  }
+  .case-note cite { font-size: 0.85rem; color: var(--muted); font-style: normal; font-weight: 500; }
+
+  /* ── CTA / CONTACT ── */
+  .cta-section {
+    background: var(--navy);
+    text-align: center;
+    padding: 6rem 4rem;
+  }
+  .cta-section .section-title { color: white; margin: 0 auto 1rem; }
+  .cta-section .section-sub { color: rgba(255,255,255,0.6); margin: 0 auto 3rem; }
+  .cta-form {
+    display: flex; gap: 1rem;
+    max-width: 480px; margin: 0 auto 1rem;
+    flex-wrap: wrap; justify-content: center;
+  }
+  .cta-form input {
+    flex: 1; min-width: 220px;
+    padding: 0.9rem 1.2rem;
+    border: 1.5px solid rgba(255,255,255,0.15);
+    background: rgba(255,255,255,0.07);
+    color: white;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+  .cta-form input::placeholder { color: rgba(255,255,255,0.35); }
+  .cta-form input:focus { border-color: var(--accent-light); }
+  .cta-form button {
+    padding: 0.9rem 1.8rem;
+    background: var(--accent);
+    color: white; border: none;
+    border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem; font-weight: 500;
+    cursor: pointer;
+    transition: background 0.2s;
+    white-space: nowrap;
+  }
+  .cta-form button:hover { background: var(--accent-light); }
+  .cta-note { font-size: 0.8rem; color: rgba(255,255,255,0.35); }
+  .or-divider { color: rgba(255,255,255,0.4); margin: 1.5rem 0; font-size: 0.9rem; }
+  .calendar-btn {
+    display: inline-flex; align-items: center; gap: 0.6rem;
+    padding: 0.9rem 2rem;
+    border: 1.5px solid rgba(255,255,255,0.25);
+    color: white; border-radius: 6px;
+    font-family: 'DM Sans', sans-serif;
+    font-size: 0.9rem; font-weight: 500;
+    cursor: pointer; background: transparent;
+    transition: all 0.2s; text-decoration: none;
+  }
+  .calendar-btn:hover { border-color: white; }
+
+  .hero-left { animation: fadeInUp 0.7s ease both; }
+
+  /* ── RESPONSIV ── */
+  @media (max-width: 900px) {
+    .hero { grid-template-columns: 1fr; padding: 7rem 1.5rem 3rem; }
+    .hero-visual { display: none; }
+    .problem-grid, .proof-grid { grid-template-columns: 1fr; }
+    .steps { grid-template-columns: 1fr 1fr; }
+    .steps::before { display: none; }
+    .tab-content.active { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+
+<!-- NAV -->
+<nav>
+  <a href="index.html" class="nav-logo">bari<span>sab</span></a>
+  <div class="nav-right">
+    <div class="lang-toggle">
+      <button class="lang-btn active" onclick="setLang('sv')" id="btn-sv">SV</button>
+      <button class="lang-btn" onclick="setLang('en')" id="btn-en">EN</button>
+    </div>
+    <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="nav-cta" data-sv="Boka demo" data-en="Book demo">Boka demo</a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<section class="hero">
+  <div class="hero-left">
+    <span class="hero-eyebrow" data-sv="Lageroptimering för nordiska SME" data-en="Inventory optimization for Nordic SMEs">Lageroptimering för nordiska SME</span>
+    <h1 data-sv="Ditt lager kostar mer än du <em>tror</em>" data-en="Your inventory costs more than you <em>think</em>">Ditt lager kostar mer än du <em>tror</em></h1>
+    <p class="hero-sub" data-sv="Vi analyserar ditt lager, kvantifierar det bundna kapitalet och ger dig en konkret åtgärdsplan — med AI-verktyg byggda specifikt för nordiska tillverkare och distributörer." data-en="We analyze your inventory, quantify tied-up capital and give you a concrete action plan — with AI tools built specifically for Nordic manufacturers and distributors.">Vi analyserar ditt lager, kvantifierar det bundna kapitalet och ger dig en konkret åtgärdsplan — med AI-verktyg byggda specifikt för nordiska tillverkare och distributörer.</p>
+    <div class="hero-actions">
+      <a href="https://iha-saas-dbjs4i4w48rg7cgc48zghs.streamlit.app/" target="_blank" rel="noopener" class="btn-primary" data-sv="Analysera ditt lager gratis →" data-en="Analyze your inventory free →">Analysera ditt lager gratis →</a>
+      <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="btn-secondary" data-sv="Boka kostnadsfri genomgång" data-en="Book a free review">Boka kostnadsfri genomgång</a>
+    </div>
+  </div>
+  <div class="hero-visual">
+    <div class="floating-badge top">
+      <div class="dot dot-green"></div>
+      <span data-sv="18,4 MSEK identifierat dödt lager" data-en="18.4 MSEK dead stock identified">18,4 MSEK identifierat dödt lager</span>
+    </div>
+    <div class="dashboard-card">
+      <div class="card-header">
+        <span class="card-title" data-sv="Lager-hälsokoll" data-en="Inventory Health Check">Lager-hälsokoll</span>
+        <span class="badge badge-blue" data-sv="Live analys" data-en="Live analysis">Live analys</span>
+      </div>
+      <div class="metric-row">
+        <div class="metric">
+          <span class="metric-val red">342</span>
+          <span class="metric-label" data-sv="Döda artiklar" data-en="Dead items">Döda artiklar</span>
+        </div>
+        <div class="metric">
+          <span class="metric-val">1 847</span>
+          <span class="metric-label" data-sv="Totalt SKU" data-en="Total SKUs">Totalt SKU</span>
+        </div>
+        <div class="metric">
+          <span class="metric-val green">-23%</span>
+          <span class="metric-label" data-sv="Lagervärde" data-en="Stock value">Lagervärde</span>
+        </div>
+      </div>
+      <div class="bar-list">
+        <div class="bar-item">
+          <span class="bar-label">A-artiklar</span>
+          <div class="bar-track"><div class="bar-fill a"></div></div>
+          <span class="bar-pct">78%</span>
+        </div>
+        <div class="bar-item">
+          <span class="bar-label">B-artiklar</span>
+          <div class="bar-track"><div class="bar-fill b"></div></div>
+          <span class="bar-pct">15%</span>
+        </div>
+        <div class="bar-item">
+          <span class="bar-label">C-artiklar</span>
+          <div class="bar-track"><div class="bar-fill c"></div></div>
+          <span class="bar-pct">7%</span>
+        </div>
+      </div>
+    </div>
+    <div class="floating-badge bottom">
+      <div class="dot dot-blue"></div>
+      <span data-sv="2–3 tim/dag sparade" data-en="2–3 hrs/day saved">2–3 tim/dag sparade</span>
+    </div>
+  </div>
+</section>
+
+<!-- PROBLEMS -->
+<section class="problems">
+  <div class="section-label" data-sv="Känner du igen dig?" data-en="Sound familiar?">Känner du igen dig?</div>
+  <h2 class="section-title" data-sv="Tre problem som kostar dig pengar varje dag" data-en="Three problems costing you money every day">Tre problem som kostar dig pengar varje dag</h2>
+  <div class="problem-grid">
+    <div class="problem-card">
+      <div class="problem-icon">📦</div>
+      <h3 data-sv="För mycket bundet kapital" data-en="Too much tied-up capital">För mycket bundet kapital</h3>
+      <p data-sv="Döda och tröga artiklar belastar balansräkningen. Du vet att pengarna finns i lagret — men inte exakt var eller hur mycket." data-en="Dead and slow-moving items burden your balance sheet. You know the money is in the inventory — but not exactly where or how much.">Döda och tröga artiklar belastar balansräkningen. Du vet att pengarna finns i lagret — men inte exakt var eller hur mycket.</p>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">🚨</div>
+      <h3 data-sv="Stockouts i fel ögonblick" data-en="Stockouts at the wrong moment">Stockouts i fel ögonblick</h3>
+      <p data-sv="Ni har för mycket av det som inte säljer och för lite av det som säljer. Säkerhetslager satta på magkänsla håller inte." data-en="You have too much of what doesn't sell and too little of what does. Safety stock set on gut feeling doesn't hold up.">Ni har för mycket av det som inte säljer och för lite av det som säljer. Säkerhetslager satta på magkänsla håller inte.</p>
+    </div>
+    <div class="problem-card">
+      <div class="problem-icon">📊</div>
+      <h3 data-sv="Excel räcker inte längre" data-en="Excel isn't enough anymore">Excel räcker inte längre</h3>
+      <p data-sv="Manuella rapporter tar timmar. Ingen ser samma siffror. Beslut fattas på gammal data och magkänsla istället för fakta." data-en="Manual reports take hours. No one sees the same numbers. Decisions are made on old data and gut feel instead of facts.">Manuella rapporter tar timmar. Ingen ser samma siffror. Beslut fattas på gammal data och magkänsla istället för fakta.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PRODUCTS -->
+<section class="products" id="products">
+  <div class="section-label" data-sv="Våra verktyg" data-en="Our tools">Våra verktyg</div>
+  <h2 class="section-title" data-sv="Konsulttjänst och SaaS — samma målgrupp" data-en="Consulting service and SaaS — same target">Konsulttjänst och SaaS — samma målgrupp</h2>
+  <p class="section-sub" data-sv="Börja med en analys. Fortsätt med plattformen. Eller tvärtom." data-en="Start with an analysis. Continue with the platform. Or the other way around.">Börja med en analys. Fortsätt med plattformen. Eller tvärtom.</p>
+
+  <div class="product-tabs">
+    <button class="tab-btn active" onclick="switchTab('skillnad')" data-sv="Skillnad — IHA som tjänst" data-en="Skillnad — IHA as a service">Skillnad — IHA som tjänst</button>
+    <button class="tab-btn" onclick="switchTab('iha')" data-sv="IHA — SaaS-plattform" data-en="IHA — SaaS Platform">IHA — SaaS-plattform</button>
+  </div>
+
+  <div class="tab-content active" id="tab-skillnad">
+    <div class="product-desc">
+      <h3 data-sv="Vet vad ditt lager verkligen kostar" data-en="Know what your inventory really costs">Vet vad ditt lager verkligen kostar</h3>
+      <p data-sv="En strukturerad analys av ditt befintliga lager. Vi identifierar döda artiklar, tröga rörelser, stockout-risker och frigjort kapital — och levererar en prioriterad åtgärdsplan." data-en="A structured analysis of your existing inventory. We identify dead items, slow movers, stockout risks and released capital — and deliver a prioritized action plan.">En strukturerad analys av ditt befintliga lager. Vi identifierar döda artiklar, tröga rörelser, stockout-risker och frigjort kapital — och levererar en prioriterad åtgärdsplan.</p>
+      <ul class="feature-list">
+        <li data-sv="ABC-klassificering av samtliga SKU" data-en="ABC classification of all SKUs">ABC-klassificering av samtliga SKU</li>
+        <li data-sv="Kvantifiering av döda och tröga artiklar" data-en="Quantification of dead and slow-moving items">Kvantifiering av döda och tröga artiklar</li>
+        <li data-sv="Stockout-frekvens och riskanalys" data-en="Stockout frequency and risk analysis">Stockout-frekvens och riskanalys</li>
+        <li data-sv="Prioriterad åtgärdsplan med SEK-värden" data-en="Prioritized action plan with SEK values">Prioriterad åtgärdsplan med SEK-värden</li>
+        <li data-sv="3–4 veckor, mestadels distans" data-en="3–4 weeks, mostly remote">3–4 veckor, mestadels distans</li>
+      </ul>
+    </div>
+    <div class="product-price-card">
+      <div style="margin-bottom:1.2rem">
+        <span class="badge badge-blue" data-sv="Fast pris" data-en="Fixed price">Fast pris</span>
+      </div>
+      <div class="tier-header" style="margin-bottom:0.25rem">
+        <span style="font-family:'DM Serif Display',serif;font-size:2rem;color:var(--navy)">35 000 – 45 000</span>
+      </div>
+      <div style="font-size:0.85rem;color:var(--muted);margin-bottom:1.5rem">SEK</div>
+      <a href="https://calendly.com/david-leifsson-barisab/30min" target="_blank" rel="noopener" class="btn-primary" style="width:100%;text-align:center;display:block" data-sv="Boka kostnadsfri genomgång" data-en="Book a free review">Boka kostnadsfri genomgång</a>
+      <div class="founder-note" style="margin-top:1rem" data-sv="✦ De fem första kunderna erbjuds Founder Rate: 25 000 SEK" data-en="✦ The first five clients are offered Founder Rate: 25,000 SEK">✦ De fem första kunderna erbjuds Founder Rate: 25 000 SEK</div>
+    </div>
+  </div>
+
+  <div class="tab-content" id="tab-iha">
+    <div class="product-desc">
+      <h3 data-sv="IHA — Inventory Health Assessment" data-en="IHA — Inventory Health Assessment">IHA — Inventory Health Assessment</h3>
+      <p data-sv="IHA är en SaaS-plattform för nordiska SME-tillverkare och distributörer. Du laddar upp din lagerexport, IHA analyserar den halvautomatiskt och du får färdiga insikter och en åtgärdsplan på minuter — utan IT-projekt." data-en="IHA is a SaaS platform for Nordic SME manufacturers and distributors. You upload your inventory export, IHA analyzes it semi-automatically, and you get ready insights and an action plan in minutes — no IT project required.">IHA är en SaaS-plattform för nordiska SME-tillverkare och distributörer. Du laddar upp din lagerexport, IHA analyserar den halvautomatiskt och du får färdiga insikter och en åtgärdsplan på minuter — utan IT-projekt.</p>
+      <ul class="feature-list">
+        <li data-sv="Import av Excel/CSV — en eller flera filer" data-en="Import Excel/CSV — single or multiple files">Import av Excel/CSV — en eller flera filer</li>
+        <li data-sv="ABC, DOS, döda artiklar och stockout-analys" data-en="ABC, DOS, dead stock and stockout analysis">ABC, DOS, döda artiklar och stockout-analys</li>
+        <li data-sv="AI-skrivna rapporter — PowerPoint, Excel och 1-sidig PDF" data-en="AI-written reports — PowerPoint, Excel and 1-page PDF">AI-skrivna rapporter — PowerPoint, Excel och 1-sidig PDF</li>
+        <li data-sv="Läser export från Visma, Monitor, Pyramid, Navision" data-en="Reads exports from Visma, Monitor, Pyramid, Navision">Läser export från Visma, Monitor, Pyramid, Navision</li>
+        <li data-sv="Halvautomatiskt idag — på väg mot full automatisering" data-en="Semi-automatic today — moving toward full automation">Halvautomatiskt idag — på väg mot full automatisering</li>
+      </ul>
+    </div>
+    <div class="product-price-card">
+      <div style="margin-bottom:1rem">
+        <span class="badge badge-blue" data-sv="Gratis provperiod — inget kort krävs" data-en="Free trial — no card required">Gratis provperiod — inget kort krävs</span>
+      </div>
+      <p style="font-size:0.85rem;color:var(--muted);margin-bottom:1.2rem" data-sv="Båda planerna inkluderar de fullständiga AI-rapporterna (PowerPoint, Excel, PDF). Advance lägger till IHA Advisor-chatt och Memory." data-en="Both plans include the full AI reports (PowerPoint, Excel, PDF). Advance adds the IHA Advisor chat and Memory.">Båda planerna inkluderar de fullständiga AI-rapporterna (PowerPoint, Excel, PDF). Advance lägger till IHA Advisor-chatt och Memory.</p>
+      <div class="price-tier featured">
+        <div class="tier-header">
+          <span class="tier-name">Premium Core ⭐</span>
+          <span class="tier-price">199 <span data-sv="€/mån" data-en="€/mo">€/mån</span></span>
+        </div>
+        <div class="tier-desc" data-sv="Import, ABC/DOS/dead stock/stockout, AI-rapporter och full analyshistorik" data-en="Import, ABC/DOS/dead stock/stockout, AI reports and full analysis history">Import, ABC/DOS/dead stock/stockout, AI-rapporter och full analyshistorik</div>
+      </div>
+      <div class="price-tier">
+        <div class="tier-header">
+          <span class="tier-name">Premium Advance</span>
+          <span class="tier-price">399 <span data-sv="€/mån" data-en="€/mo">€/mån</span></span>
+        </div>
+        <div class="tier-desc" data-sv="Allt i Core + IHA Advisor (AI-agentchatt) och Memory (noter, alerts & kontext mellan sessioner)" data-en="Everything in Core + IHA Advisor (AI agent chat) and Memory (notes, alerts & context across sessions)">Allt i Core + IHA Advisor (AI-agentchatt) och Memory (noter, alerts & kontext mellan sessioner)</div>
+      </div>
+      <a href="https://iha-saas-dbjs4i4w48rg7cgc48zghs.streamlit.app/" target="_blank" rel="noopener" class="btn-primary" style="width:100%;text-align:center;display:block;margin-top:0.5rem" data-sv="Analysera ditt lager gratis →" data-en="Analyze your inventory free →">Analysera ditt lager gratis →</a>
+      <div class="founder-note" data-sv="✦ Säker återkommande betalning via PayPal eller kort — kortuppgifter lagras aldrig hos oss." data-en="✦ Secure recurring payment via PayPal or card — card details are never stored on our servers.">✦ Säker återkommande betalning via PayPal eller kort — kortuppgifter lagras aldrig hos oss.</div>
+    </div>
+  </div>
+</section>
+
+<!-- HOW IT WORKS -->
+<section class="how">
+  <div class="section-label" data-sv="Så här fungerar det" data-en="How it works">Så här fungerar det</div>
+  <h2 class="section-title" data-sv="Från data till beslut på tre veckor" data-en="From data to decision in three weeks">Från data till beslut på tre veckor</h2>
+  <div class="steps">
+    <div class="step">
+      <div class="step-num">1</div>
+      <h4 data-sv="Kostnadsfri genomgång" data-en="Free review">Kostnadsfri genomgång</h4>
+      <p data-sv="30 minuter. Vi tittar på din situation och berättar om vi kan hjälpa — inga förpliktelser." data-en="30 minutes. We look at your situation and tell you if we can help — no obligations.">30 minuter. Vi tittar på din situation och berättar om vi kan hjälpa — inga förpliktelser.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">2</div>
+      <h4 data-sv="Dataexport" data-en="Data export">Dataexport</h4>
+      <p data-sv="Du exporterar lagerdata från ditt ERP. CSV eller Excel räcker. Vi hanterar resten." data-en="You export inventory data from your ERP. CSV or Excel is enough. We handle the rest.">Du exporterar lagerdata från ditt ERP. CSV eller Excel räcker. Vi hanterar resten.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">3</div>
+      <h4 data-sv="Analys och insikter" data-en="Analysis and insights">Analys och insikter</h4>
+      <p data-sv="Vi kör analysen i IHA och presenterar resultat med konkreta SEK-värden och prioriteringar." data-en="We run the analysis in IHA and present results with concrete SEK values and priorities.">Vi kör analysen i IHA och presenterar resultat med konkreta SEK-värden och prioriteringar.</p>
+    </div>
+    <div class="step">
+      <div class="step-num">4</div>
+      <h4 data-sv="Åtgärdsplan" data-en="Action plan">Åtgärdsplan</h4>
+      <p data-sv="Du får en prioriterad lista — vad du ska göra vecka 1, månad 1 och kvartal 1. Inga vaga råd." data-en="You get a prioritized list — what to do week 1, month 1 and quarter 1. No vague advice.">Du får en prioriterad lista — vad du ska göra vecka 1, månad 1 och kvartal 1. Inga vaga råd.</p>
+    </div>
+  </div>
+</section>
+
+<!-- PROOF -->
+<section class="proof">
+  <div class="section-label" data-sv="Resultat" data-en="Results">Resultat</div>
+  <h2 class="section-title" data-sv="Siffror från verkliga uppdrag" data-en="Numbers from real assignments">Siffror från verkliga uppdrag</h2>
+  <div class="proof-grid">
+    <div class="proof-stat">
+      <span class="num">18<span>+</span></span>
+      <p data-sv="MSEK dödt lager identifierat i ett enskilt uppdrag" data-en="MSEK dead stock identified in a single assignment">MSEK dödt lager identifierat i ett enskilt uppdrag</p>
+    </div>
+    <div class="proof-stat">
+      <span class="num">1 800<span>+</span></span>
+      <p data-sv="Artiklar analyserade i referensuppdrag (SAS Inflight)" data-en="Items analyzed in reference assignment (SAS Inflight)">Artiklar analyserade i referensuppdrag (SAS Inflight)</p>
+    </div>
+    <div class="proof-stat">
+      <span class="num">2–3</span>
+      <p data-sv="Timmar sparade per dag genom automatiserat godkännandeflöde" data-en="Hours saved per day through automated approval workflow">Timmar sparade per dag genom automatiserat godkännandeflöde</p>
+    </div>
+  </div>
+  <div class="case-note">
+    <p data-sv="\"Analysen identifierade döda artiklar och ineffektiva inköpsflöden vi inte visste att vi hade. Det sparade oss både tid och kapital på ett sätt som Excel aldrig kunnat göra.\"" data-en="\"The analysis identified dead items and inefficient purchasing flows we didn't know we had. It saved us both time and capital in a way Excel could never do.\"">
+      "Analysen identifierade döda artiklar och ineffektiva inköpsflöden vi inte visste att vi hade. Det sparade oss både tid och kapital på ett sätt som Excel aldrig kunnat göra."
+    </p>
+    <cite data-sv="— Referensuppdrag, nordisk tillverkare" data-en="— Reference assignment, Nordic manufacturer">— Referensuppdrag, nordisk tillverkare</cite>
+  </div>
+</section>
+
+<!-- CTA / CONTACT -->
+<section class="cta-section" id="contact">
+  <h2 class="section-title" data-sv="Redo att se vad ditt lager egentligen kostar?" data-en="Ready to see what your inventory is really costing?">Redo att se vad ditt lager egentligen kostar?</h2>
+  <p class="section-sub" data-sv="Lämna din e-post så hör vi av oss inom 24 timmar. Eller boka direkt." data-en="Leave your email and we'll be in touch within 24 hours. Or book directly.">Lämna din e-post så hör vi av oss inom 24 timmar. Eller boka direkt.</p>
+  <div class="cta-form">
+    <input type="email" id="email-input" placeholder="din@epost.se">
+    <button onclick="handleSubmit()" data-sv="Kontakta mig" data-en="Contact me">Kontakta mig</button>
+  </div>
+  <div class="success-msg" id="success-msg">✓ Tack! Vi hör av oss inom 24 timmar.</div>
+  <p class="cta-note" data-sv="Ingen spam. Ingen försäljning utan samtycke." data-en="No spam. No sales without consent.">Ingen spam. Ingen försäljning utan samtycke.</p>
+  <div class="or-divider" data-sv="— eller —" data-en="— or —">— eller —</div>
+  <a href="mailto:david.leifsson@barisab.com" class="calendar-btn">
+    <span>📅</span>
+    <span data-sv="Skicka e-post direkt till david.leifsson@barisab.com" data-en="Send email directly to david.leifsson@barisab.com">Skicka e-post direkt till david.leifsson@barisab.com</span>
+  </a>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-logo">bari<span>sab</span></div>
+  <p data-sv="© 2026 Barisab / SCM International. David Leifsson." data-en="© 2026 Barisab / SCM International. David Leifsson.">© 2026 Barisab / SCM International. David Leifsson.</p>
+  <p><a href="mailto:david.leifsson@barisab.com" style="color:rgba(255,255,255,0.4);text-decoration:none">david.leifsson@barisab.com</a></p>
+</footer>
+
+<script>
+  let currentLang = 'sv';
+
+  function setLang(lang) {
+    currentLang = lang;
+    document.documentElement.lang = lang;
+    document.getElementById('btn-sv').classList.toggle('active', lang === 'sv');
+    document.getElementById('btn-en').classList.toggle('active', lang === 'en');
+
+    document.querySelectorAll('[data-sv]').forEach(el => {
+      const txt = el.getAttribute('data-' + lang);
+      if (!txt) return;
+      if (el.tagName === 'H1') {
+        el.innerHTML = txt;
+      } else {
+        el.textContent = txt;
+      }
+    });
+
+    const emailInput = document.getElementById('email-input');
+    if (emailInput) {
+      emailInput.placeholder = lang === 'sv' ? 'din@epost.se' : 'your@email.com';
+    }
+  }
+
+  function switchTab(tab) {
+    document.querySelectorAll('.tab-btn').forEach((btn, i) => {
+      btn.classList.toggle('active', (i === 0 && tab === 'skillnad') || (i === 1 && tab === 'iha'));
+    });
+    document.getElementById('tab-skillnad').classList.toggle('active', tab === 'skillnad');
+    document.getElementById('tab-iha').classList.toggle('active', tab === 'iha');
+  }
+
+  function handleSubmit() {
+    const val = document.getElementById('email-input').value;
+    if (!val || !val.includes('@')) return;
+    document.getElementById('success-msg').style.display = 'block';
+    document.getElementById('email-input').value = '';
+    const msg = document.getElementById('success-msg');
+    msg.textContent = currentLang === 'sv'
+      ? '✓ Tack! Vi hör av oss inom 24 timmar.'
+      : '✓ Thanks! We\'ll be in touch within 24 hours.';
+  }
+</script>
+</body>
+</html>
