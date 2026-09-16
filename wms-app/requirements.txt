@@ -1,0 +1,18 @@
+# Pinned to the same known-good range as iha-saas/requirements.txt -- see
+# that file's comment for why (a pandas 3.0 / numba / statsmodels wheel
+# incident on Streamlit Cloud forced these pins; carried over here even
+# though this app deploys to a plain VPS, not Streamlit Cloud, since the
+# underlying wheel-availability issue is not platform-specific).
+streamlit>=1.35.0
+pandas>=2.0.0,<3.0.0
+numpy>=1.25.0,<2.2.0
+
+# sqlite3 is stdlib.
+#
+# Deliberately NOT vendored from iha-saas: analysis/demand_forecast.py
+# (SBC classification, ETS/Croston-SBA/TSB forecasting) and its
+# scipy/numba/statsmodels/statsforecast dependencies. That is real weight
+# (and the exact stack that caused the Streamlit Cloud build incident
+# documented in iha-saas/CLAUDE.md) for a feature outside milestone 3's
+# scope -- ABC/DOS/XYZ/lead-time/bridge only. Add it as its own milestone if
+# wanted later, matching those pins from iha-saas/requirements.txt exactly.

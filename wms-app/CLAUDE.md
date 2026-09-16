@@ -1,0 +1,155 @@
+# CLAUDE.md — WMS-app
+
+Multi-tenant warehouse management system with SQLite as the system of
+record, built for David's SME logistics-consulting clients. Full plan and
+rationale: `/Users/davidleifsson/.claude/plans/deep-tumbling-lagoon.md`.
+
+## What this is, in one paragraph
+
+Every other lager-tool in this repo (`inventory-app`, `iha-saas`,
+`inventory-demo`) is an analysis app: upload an Excel file once, get a
+report. This is not that. WMS-app owns the live warehouse state — items,
+locations, stock balances, and every receive/putaway/pick/pack/ship/adjust
+movement — and runs the same IHA analysis logic from `iha-saas` directly
+against that live transaction history instead of an uploaded file.
+
+## Architecture decisions (don't relitigate without reading why first)
+
+- **One SQLite file per company** (`data/tenants/<slug>.db`), not one shared
+  database. SQLite has no row-level security, so isolation is physical, not
+  a `WHERE company_id = ?` clause someone could forget. `data/directory.db`
+  is the only shared file and holds identity only (companies, users) — never
+  operational data.
+- **`views/`, not `pages/`.** Streamlit auto-detects a folder literally named
+  `pages/` next to the entry script and injects its own multipage sidebar
+  nav — confirmed locally, it silently duplicated the app's own radio nav.
+  `iha-defense/app/views/` already avoided this; do the same here. If you
+  ever see a stray native Streamlit page-nav appear, this is why.
+- **No ORM, no Supabase.** Plain `sqlite3` + `sqlite3.Row`, same pattern as
+  `transportbokning/app.py`. Auth is local: `hashlib.pbkdf2_hmac` (stdlib,
+  no `bcrypt` C-extension to build on the deploy VPS) + a `directory.db`
+  users table. `auth.password_problem()` is a verbatim port of
+  `iha-saas/auth.py`'s function — keep the two in sync if the policy ever
+  changes.
+- **`db.record_transaction()` is the only path that may write to `stock`.**
+  It keeps `stock` balances and the `transactions` audit log consistent in
+  one place; never `UPDATE stock` directly from a page. Insufficient-stock
+  attempts raise `ValueError` rather than going negative — surface that to
+  the user, don't swallow it.
+- **WAL mode** is enabled per tenant connection (`PRAGMA journal_mode=WAL`
+  in `schema/tenant.sql` and `db.get_tenant_conn`). Fine for a handful of
+  concurrent warehouse users; if a tenant ever needs more, the schema is
+  already written in the SQLite/Postgres intersection (see
+  `iha-defense/data/schema.sql` for the same convention) so migrating that
+  one tenant to Postgres is not a rewrite.
+
+## IHA integration (milestone 3 — built)
+
+`analysis/{dos_calculator,abc_classifier,segmentation,lead_time,
+inventory_bridge}.py` are full, unmodified vendor copies of the
+`iha-saas/analysis/` originals (zero Supabase dependencies there — pure
+pandas in, pandas out). `analysis/data_merge.py` is a **trimmed** copy: only
+`sales_statistics()`, `aggregate_inbound()` and the helpers they call are
+kept — `guess_mapping`/`detect_role`/`SYNONYMS`/`build_canonical` from the
+source file exist there to solve messy-Excel-column-name problems that
+wms-app's own SQLite schema doesn't have.
+
+`analysis_bridge.py` replaces the Excel-upload step:
+`build_canonical(conn)` reads `items`/`stock`/`transactions` directly into
+the same canonical column shape `iha-saas` produces from a file, then
+`run_analysis(df)` runs the exact same pipeline order as
+`iha-saas/pages/upload.py:_run_analysis()`:
+
+```
+calculate_dos → classify_status → classify_abc → segment
+  → resolve_lead_time → compute_replenishment → compute_bridge → classify_root_cause
+```
+
+`views/iha_report.py` renders it: KPI row from the bridge summary
+(total/dead/excess/releasable/deficit/annual saving), status breakdown,
+ABC×XYZ matrix, root-cause expanders, and the full item table.
+
+This is a vendored copy, not a shared package — fixes in `iha-saas/analysis/`
+do not automatically propagate here. Acceptable tradeoff for now (see plan
+file); revisit if both apps live long enough that the drift becomes painful.
+
+**Deliberately not vendored:** `analysis/demand_forecast.py` (SBC
+classification, ETS/Croston-SBA/TSB forecasting) and its
+scipy/numba/statsmodels/statsforecast dependencies — real weight (the exact
+stack behind the Streamlit Cloud build incident documented in
+`iha-saas/CLAUDE.md`) for a feature outside milestone 3's scope. Add as its
+own milestone later if wanted, matching those pins from
+`iha-saas/requirements.txt` exactly.
+
+**Known MVP limitation:** `analysis_bridge.build_canonical()` doesn't pass
+an `order_date_col`/`promised_col` to `aggregate_inbound()` — the WMS schema
+has no "ordered at" timestamp separate from "received at" yet, only a single
+`receive` transaction. So `lead_time.resolve_lead_time()` almost always
+falls back to `lead_time_source = "master"` (the item's own
+`lead_time_days`) rather than `sku_measured`/`supplier_measured`. Honest
+limitation, not a bug — fixable later by adding an inbound-order table with
+both dates.
+
+**`db.now_iso()` stores naive UTC timestamps (no `+00:00` suffix), on
+purpose** — added when building this integration. The vendored analysis code
+does plain (tz-naive) datetime arithmetic throughout (days-since-movement,
+month-period grouping); mixing naive and tz-aware pandas Timestamps raises.
+Naive-but-always-UTC was simpler than threading `tz_localize` calls through
+vendored code written assuming naive dates.
+
+**Verified 2026-09-16** with a hand-built 6-SKU, 150-day transaction history
+(3 healthy items at varying DOS, one zero-demand dead-stock item, one item
+picked down to an exact stockout) run through the real pipeline via script
+and confirmed in the browser: every number — DOS, status, ABC tier, and the
+full bridge (justified/excess/dead/deficit) — matched hand calculation
+exactly, including the bridge's SEK totals down to the unit.
+
+## Deployment (not yet built — milestone 4)
+
+Target: **0 kr/month.** Oracle Cloud "Always Free" ARM VPS (not Streamlit
+Cloud — it has no persistent disk, and this app's whole point is to own a
+disk-backed database) + the subdomain `wms.barisab.com` (David already owns
+`barisab.com`) + Caddy for free automatic HTTPS. Fallback if Oracle's free
+tier is hard to provision: Hetzner CX22 (~4.5 EUR/month). Full detail in the
+plan file's "Drift" section, including the daily SQLite `.backup` + rclone
+cron plan — do not skip backups when building milestone 4, a VPS disk
+failure with no backup is total data loss for every tenant.
+
+## Status
+
+- **Milestone 1 (foundations) — done, verified 2026-09-16.** Registration,
+  login, per-tenant DB creation/isolation, item/location CRUD, stock view,
+  manual stock adjustment with insufficient-stock rejection — all tested
+  through both a scripted DB-layer check and a live browser walkthrough.
+- **Milestone 2 (receive/pick/orders with barcode scanning) — done, verified
+  2026-09-16.** `views/receive.py`, `views/orders.py`, `views/pick.py`,
+  `components/barcode_input.py`, `components/flash.py`. Full lifecycle
+  tested live in the browser: receive 200 units (dock ≠ putaway location, so
+  both a `receive` and a `putaway` transaction fire), create an order with a
+  line, partial pick (25) confirms order status flips `open → picking`, the
+  final pick (35) auto-flips `picking → packed`, "Markera som skickad" flips
+  `packed → shipped`, and the stock view lands on the correct final balance
+  (140 = 200 − 60). Also confirmed a barcode scan resolves to the correct
+  open order line and pre-fills the confirm quantity to whatever remains.
+- **Milestone 3 (IHA integration) — done, verified 2026-09-16.** See "IHA
+  integration" above for the full verification detail.
+- **Milestone 4 (deployment) — not started.** Needs David to create the
+  Oracle Cloud account himself (requires a card at signup, even though free)
+  and confirm where `barisab.com` DNS is managed before this can proceed.
+
+## Barcode scanning (milestone 2 — built)
+
+No camera code. `components/barcode_input.py:barcode_scan_form()` is a
+single-widget `st.form` — Streamlit auto-submits a form on Enter when it has
+exactly one input, which is exactly what a USB/Bluetooth scanner sends after
+typing the code, so no JS glue was needed. `db.find_item_by_code()` resolves
+either a barcode or a bare SKU, since an operator can also type one by hand.
+
+Both receive.py and pick.py use the same two-step shape: a scan only ever
+identifies a match and stashes it in `st.session_state` (`receive_pending` /
+`pick_pending`); the actual `db.record_transaction()` call only happens
+after an explicit qty confirmation, so a mis-scan can never move stock by
+itself. `components/flash.py` carries a success/error message across the
+`st.rerun()` that step needs, since a bare `st.success()` right before rerun
+never reaches the user otherwise — this pattern is shared by both pages and
+will be needed again in milestone 3 if reports get a similar interaction.
