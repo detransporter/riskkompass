@@ -17,6 +17,7 @@ import db
 from views import items as page_items
 from views import stock as page_stock
 from views import receive as page_receive
+from views import transfer as page_transfer
 from views import orders as page_orders
 from views import pick as page_pick
 from views import iha_report as page_iha_report
@@ -29,6 +30,7 @@ PAGES = {
     "Artiklar & platser": page_items,
     "Lagersaldo": page_stock,
     "Ta emot": page_receive,
+    "Flytta": page_transfer,
     "Ordrar": page_orders,
     "Plocka": page_pick,
     "IHA-rapport": page_iha_report,

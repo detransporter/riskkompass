@@ -104,6 +104,40 @@ and confirmed in the browser: every number — DOS, status, ABC tier, and the
 full bridge (justified/excess/dead/deficit) — matched hand calculation
 exactly, including the bridge's SEK totals down to the unit.
 
+## Stock transfers (`views/transfer.py` — built 2026-09-16, post-milestone-3)
+
+Added after the three planned milestones, on request: a standalone "Flytta"
+page for moving stock between two locations for reasons unrelated to
+receiving (reorganizing, cycle-count corrections). No new schema or
+transaction type was needed — `db.record_transaction`'s `putaway` type
+already models "move qty from `from_location` to `to_location`" exactly;
+`receive.py` was already calling it internally as the second half of a
+combined receive+putaway. This page just exposes that same call as its own
+scan-driven flow (same two-step scan → confirm shape as receive.py/pick.py),
+showing current per-location stock for the scanned SKU so the operator can
+see where to move *from* before choosing a destination.
+
+Validates `from_location != to_location` before calling
+`record_transaction` (a same-location "transfer" would net to zero stock
+change but still add a confusing log row — same reasoning receive.py
+already documents for skipping a same-location putaway). Insufficient-stock
+`ValueError` from `record_transaction` is caught and shown as a page error,
+same pattern as every other write path in this app.
+
+Verified live: scanned an item with 160 units at A-01-01, moved 60 to a new
+location B-02-01, confirmed the stock view split correctly to 100/60 across
+the two locations with the total unchanged.
+
+**Manual selection, no scanner required.** The scan field already accepted
+typed SKUs (`db.find_item_by_code` checks barcode OR sku), but on request a
+second option was added: a dropdown ("Eller välj manuellt ur listan") below
+the scan form, populated from `_items_with_stock()` (only SKUs that
+currently have stock somewhere -- no point listing an item with nothing to
+move). Selecting + clicking "Välj artikel" sets the same `_PENDING_KEY`
+session state the scan path sets, so step 2 (confirm) is identical either
+way. Verified live: picking SKU-100 from the dropdown landed on the same
+confirm screen as scanning it would.
+
 ## Deployment (not yet built — milestone 4)
 
 Target: **0 kr/month.** Oracle Cloud "Always Free" ARM VPS (not Streamlit
