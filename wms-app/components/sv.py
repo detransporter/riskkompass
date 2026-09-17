@@ -158,6 +158,7 @@ COLUMN_LABELS = {
     "lead_time_sigma": "Ledtidsspridning (dagar)",
     "lead_time_gap": "Avvikelse mot angiven ledtid",
     "remaining": "Kvar att plocka",
+    "order_value_sek": "Ordervärde (SEK)",
 }
 
 

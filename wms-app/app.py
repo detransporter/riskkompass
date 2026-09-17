@@ -20,6 +20,7 @@ from views import receive as page_receive
 from views import transfer as page_transfer
 from views import orders as page_orders
 from views import pick as page_pick
+from views import reorder as page_reorder
 from views import iha_report as page_iha_report
 
 st.set_page_config(page_title="WMS", page_icon="📦", layout="wide")
@@ -33,6 +34,7 @@ PAGES = {
     "Flytta": page_transfer,
     "Ordrar": page_orders,
     "Plocka": page_pick,
+    "Påfyllning": page_reorder,
     "IHA-rapport": page_iha_report,
 }
 

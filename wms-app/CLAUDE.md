@@ -194,11 +194,51 @@ Saldojustering form (not just read from source).
 **Deliberately still not done** (flagged to David, not started): demand
 forecasting (`demand_forecast.py` — heavy scipy/numba/statsmodels/statsforecast
 chain, the exact stack behind a real Streamlit Cloud incident documented in
-`iha-saas/CLAUDE.md`) and a dedicated reorder/påfyllnadslista view (medium
-effort, builds on data already computed — good next candidate). PDF/PPT
-export not started either; PPT in particular is a substantial module in
-`iha-saas` (915 lines/39 functions with matplotlib-rendered charts), not a
-quick add.
+`iha-saas/CLAUDE.md`). PDF/PPT export not started either; PPT in particular
+is a substantial module in `iha-saas` (915 lines/39 functions with
+matplotlib-rendered charts), not a quick add.
+
+## Påfyllningslista (`views/reorder.py` — built 2026-09-17)
+
+Standalone page ("Påfyllning" in the sidebar, between Plocka and IHA-rapport
+— checked daily, not read top-to-bottom like the analysis report). No new
+analysis: `reorder_df(df)` in `views/reorder.py` is a pure function (no
+Streamlit calls, directly unit-testable) that filters the already-computed
+`run_analysis()` output to `order_qty > 0` and sorts by
+`(stockout_risk desc, dos asc, order_value_sek desc)` — safety first, then
+urgency, then dollar impact.
+
+**The nuance worth remembering:** a "healthy" DOS status and "needs
+reordering" are different questions with different answers. Verified live
+with real data: SKU-A2 had `status = healthy` (normal DOS) but still showed
+up on the reorder list with `order_qty = 60`, because current stock had
+dropped below the replenishment target (`rop` + 30 days buffer) even though
+the DOS-based status classifier hadn't flagged it. The docstring in
+`reorder.py` calls this out explicitly so a future reader doesn't "fix" it
+as a bug.
+
+Grouped-by-supplier subtotal table included (same rationale as the IHA
+report's Leverantörsanalys — a buyer places one PO per supplier, not one
+per SKU). Excel export via the same `components/export.py` helper as
+everywhere else.
+
+**Read-only by design.** No "mark as ordered" — that would need open-PO
+tracking the schema doesn't have (see the lead-time reconciliation
+limitation above). The same SKU reappears tomorrow if nothing was actually
+ordered or received; `render()`'s docstring says so explicitly.
+
+**Verified**, not just read from source: `test_analysis_bridge.py` asserts
+on the exact fixture values inspected beforehand (not guessed) —
+`SKU-STOCKOUT` (order_qty=129, stockout_risk) must sort *ahead of*
+`SKU-A2` (order_qty=60, no stockout risk) despite a *smaller* SEK value
+(19,350 vs 48,000), proving urgency outranks dollar size in the sort.
+`SKU-DEAD` must never appear. Live browser walkthrough confirmed the same
+two rows in the same order, correct Swedish column headers throughout
+(caught and fixed two real bugs this way: `order_value_sek` was missing
+from `COLUMN_LABELS`, and the supplier-subtotal table had a stray lowercase
+"leverantör" header from renaming a column before `rename_columns()` ran
+instead of after), and a real Excel download reloaded with `openpyxl` to
+confirm correct headers and data.
 
 ## Stock transfers (`views/transfer.py` — built 2026-09-16, post-milestone-3)
 

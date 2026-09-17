@@ -27,6 +27,7 @@ from analysis.health_scorer import summary_stats
 from analysis.lead_time import lead_time_reconciliation, supplier_flags, supplier_scorecard
 from analysis_bridge import build_canonical, run_analysis
 from components.sv import supplier_flags_sv, translate_demand_note
+from views.reorder import reorder_df
 
 TEST_COMPANY_NAME = "__test_analysis_bridge_smoke__"
 TODAY = datetime(2026, 9, 16)
@@ -250,6 +251,37 @@ def main():
             fail(f"expected trend_class to be None for all SKUs (only 4 complete months < 6 required), "
                  f"got {trend_known} classified -- either the fixture grew more history or classify_trend changed")
         print("OK  trend_class correctly stays unclassified with only 4 complete months of history")
+
+        # ── views/reorder.py: påfyllningslista ──────────────────────────────
+        # Real values from this exact fixture (verified by inspection before
+        # writing the assertions, not guessed): SKU-A2 has order_qty=60 despite
+        # status='healthy' -- a normal DOS does not mean "nothing to order",
+        # the reorder list answers a different question than the status
+        # column. SKU-STOCKOUT has order_qty=129 and stockout_risk=True.
+        # Every other SKU (A1, B1, C1, DEAD) has order_qty=0 and must be
+        # excluded. STOCKOUT must sort ahead of A2 despite a SMALLER SEK
+        # value (19350 vs 48000) because stockout risk outranks order value.
+        need = reorder_df(result)
+        if set(need["sku"]) != {"SKU-A2", "SKU-STOCKOUT"}:
+            fail(f"reorder_df: expected exactly {{SKU-A2, SKU-STOCKOUT}}, got {set(need['sku'])}")
+        print("OK  reorder_df includes only the two SKUs with order_qty > 0")
+
+        if list(need["sku"]) != ["SKU-STOCKOUT", "SKU-A2"]:
+            fail(f"reorder_df: expected STOCKOUT before A2 (stockout risk outranks SEK value), "
+                 f"got order {list(need['sku'])}")
+        print("OK  reorder_df sorts stockout-risk ahead of a larger-SEK non-urgent item")
+
+        stockout_row = need[need["sku"] == "SKU-STOCKOUT"].iloc[0]
+        _check_close("reorder_df SKU-STOCKOUT order_value_sek (129 * 150)",
+                     stockout_row["order_value_sek"], 19350)
+        a2_row = need[need["sku"] == "SKU-A2"].iloc[0]
+        _check_close("reorder_df SKU-A2 order_value_sek (60 * 800)",
+                     a2_row["order_value_sek"], 48000)
+        print("OK  reorder_df order_value_sek computed correctly")
+
+        if "SKU-DEAD" in set(need["sku"]):
+            fail("reorder_df must never suggest reordering dead stock")
+        print("OK  reorder_df excludes dead stock")
 
         conn.close()
     finally:
