@@ -23,7 +23,10 @@ from pathlib import Path
 
 import auth
 import db
+from analysis.health_scorer import summary_stats
+from analysis.lead_time import lead_time_reconciliation, supplier_flags, supplier_scorecard
 from analysis_bridge import build_canonical, run_analysis
+from components.sv import supplier_flags_sv, translate_demand_note
 
 TEST_COMPANY_NAME = "__test_analysis_bridge_smoke__"
 TODAY = datetime(2026, 9, 16)
@@ -91,19 +94,22 @@ def main():
         conn = db.get_tenant_conn(slug)
         conn.execute("INSERT INTO locations (code, zone, location_type) VALUES ('A-01', 'A', 'picking')")
 
+        # SKU-A1 + SKU-A2 are both sourced from "Leverantör A" -- together they
+        # carry ~90% of total inventory value, which should trip the
+        # supplier_flags() concentration-risk threshold (>40%).
         items = [
-            ("SKU-A1", "Toppmotor 5000", 1000.0, 14),
-            ("SKU-A2", "Kraftpaket 3000", 800.0, 21),
-            ("SKU-B1", "Standardventil", 200.0, 10),
-            ("SKU-C1", "Klämma liten", 50.0, 7),
-            ("SKU-DEAD", "Utgått fäste", 300.0, 30),
-            ("SKU-STOCKOUT", "Hetsåld packning", 150.0, 5),
+            ("SKU-A1", "Toppmotor 5000", 1000.0, 14, "Leverantör A"),
+            ("SKU-A2", "Kraftpaket 3000", 800.0, 21, "Leverantör A"),
+            ("SKU-B1", "Standardventil", 200.0, 10, "Leverantör B"),
+            ("SKU-C1", "Klämma liten", 50.0, 7, "Leverantör B"),
+            ("SKU-DEAD", "Utgått fäste", 300.0, 30, "Leverantör B"),
+            ("SKU-STOCKOUT", "Hetsåld packning", 150.0, 5, "Leverantör B"),
         ]
-        for sku, desc, cost, lt in items:
+        for sku, desc, cost, lt, supplier in items:
             conn.execute(
-                "INSERT INTO items (sku, description, unit_cost, currency, lead_time_days, created_at) "
-                "VALUES (?,?,?,?,?,?)",
-                (sku, desc, cost, "SEK", lt, db.now_iso()),
+                "INSERT INTO items (sku, description, unit_cost, currency, lead_time_days, supplier, created_at) "
+                "VALUES (?,?,?,?,?,?,?)",
+                (sku, desc, cost, "SEK", lt, supplier, db.now_iso()),
             )
         conn.commit()
 
@@ -150,6 +156,16 @@ def main():
         result, bridge = run_analysis(canon)
         by_sku = result.set_index("sku")
 
+        # ── components/sv.py: the Swedish UI must never leak the vendored
+        # module's raw English note text ──────────────────────────────────
+        note_sv = translate_demand_note(note)
+        if note_sv == note:
+            fail(f"translate_demand_note did not translate a real build_canonical() note "
+                 f"(regex pattern is out of sync with data_merge.py's wording): {note!r}")
+        if "Observed window" in note_sv or "complete months" in note_sv:
+            fail(f"translate_demand_note left English text in the translated note: {note_sv!r}")
+        print(f"OK  translate_demand_note: {note_sv!r}")
+
         expected_status = {
             "SKU-A1": "healthy", "SKU-A2": "healthy", "SKU-B1": "healthy",
             "SKU-C1": "healthy", "SKU-DEAD": "dead_stock", "SKU-STOCKOUT": "stockout_risk",
@@ -184,6 +200,56 @@ def main():
         _check_close("bridge justified_cycle", bridge["justified_cycle"], 692000)
         _check_close("bridge cash_from_dead", bridge["cash_from_dead"], 7500)
         _check_close("bridge annual_holding_saving", bridge["annual_holding_saving"], 6600)
+
+        # ── health_scorer.py ────────────────────────────────────────────
+        stats = summary_stats(result)
+        if stats["total_skus"] != 6:
+            fail(f"summary_stats total_skus: expected 6, got {stats['total_skus']}")
+        if not (0 < stats["health_score"] < 100):
+            fail(f"health_score should be strictly between 0 and 100 for a mixed estate, got {stats['health_score']}")
+        print(f"OK  summary_stats: health_score={stats['health_score']}, total_skus={stats['total_skus']}")
+
+        # ── lead_time.py: supplier_scorecard + supplier_flags ───────────
+        scorecard = supplier_scorecard(result)
+        if set(scorecard["supplier"]) != {"Leverantör A", "Leverantör B"}:
+            fail(f"supplier_scorecard: expected suppliers A and B, got {set(scorecard['supplier'])}")
+        a_row = scorecard[scorecard["supplier"] == "Leverantör A"].iloc[0]
+        _check_close("supplier A value_sek (SKU-A1 + SKU-A2)", a_row["value_sek"], 650000)
+        if a_row["value_share"] <= 0.40:
+            fail(f"Leverantör A should hold >40% of value (concentration risk), got {a_row['value_share']:.2%}")
+        print(f"OK  supplier_scorecard: Leverantör A holds {a_row['value_share']:.0%} of inventory value")
+
+        flags = supplier_flags(scorecard)
+        if not any("Concentration risk" in f and "Leverantör A" in f for f in flags):
+            fail(f"supplier_flags should raise a concentration-risk flag for Leverantör A, got: {flags}")
+        print("OK  supplier_flags raises concentration risk for Leverantör A")
+
+        # components/sv.py:supplier_flags_sv() -- the Swedish UI-facing version.
+        # Same trigger condition, translated text, used by views/iha_report.py.
+        flags_sv = supplier_flags_sv(scorecard)
+        if not any("Koncentrationsrisk" in f and "Leverantör A" in f for f in flags_sv):
+            fail(f"supplier_flags_sv should raise a Swedish concentration-risk flag, got: {flags_sv}")
+        if any("Concentration risk" in f for f in flags_sv):
+            fail(f"supplier_flags_sv leaked the English vendored wording: {flags_sv}")
+        print("OK  supplier_flags_sv raises the same flag in Swedish")
+
+        # ── lead_time.py: reconciliation (honest zero, no order-date data yet) ──
+        recon = lead_time_reconciliation(result)
+        if recon.get("measured_skus", -1) != 0:
+            fail(f"lead_time_reconciliation: expected measured_skus=0 (no order-date data fed in), got {recon}")
+        print("OK  lead_time_reconciliation correctly reports 0 measured SKUs (no inbound order-date tracking yet)")
+
+        # ── segmentation.py: trend needs >=6 complete months (2*TREND_WINDOW) ──
+        # This fixture only has 4 complete months (150 days, trimmed at both
+        # ends) -- classify_trend() correctly leaves trend_class as None for
+        # everyone rather than guessing from a too-short window. The populated
+        # case (trend_class actually set) is exercised live in the browser
+        # with a longer transaction history, not here.
+        trend_known = result["trend_class"].notna().sum()
+        if trend_known != 0:
+            fail(f"expected trend_class to be None for all SKUs (only 4 complete months < 6 required), "
+                 f"got {trend_known} classified -- either the fixture grew more history or classify_trend changed")
+        print("OK  trend_class correctly stays unclassified with only 4 complete months of history")
 
         conn.close()
     finally:

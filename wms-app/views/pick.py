@@ -17,6 +17,7 @@ import auth
 import db
 from components.barcode_input import barcode_scan_form
 from components.flash import flash, render_flash
+from components.sv import rename_columns
 
 _PENDING_KEY = "pick_pending"
 
@@ -152,7 +153,7 @@ def render(user: auth.User) -> None:
             return
 
         order_no = st.selectbox("Order", orders)
-        st.dataframe(_pick_list(conn, order_no), width="stretch", hide_index=True)
+        st.dataframe(rename_columns(_pick_list(conn, order_no)), width="stretch", hide_index=True)
         st.divider()
 
         if _PENDING_KEY in st.session_state and st.session_state[_PENDING_KEY]["order_no"] == order_no:

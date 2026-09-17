@@ -19,6 +19,7 @@ import auth
 import db
 from components.barcode_input import barcode_scan_form
 from components.flash import flash, render_flash
+from components.sv import rename_columns
 
 _PENDING_KEY = "transfer_pending"
 
@@ -78,7 +79,7 @@ def _render_confirm_step(conn: sqlite3.Connection, user: auth.User) -> None:
             st.rerun()
         return
 
-    st.dataframe(stock_df, width="stretch", hide_index=True)
+    st.dataframe(rename_columns(stock_df), width="stretch", hide_index=True)
 
     from_locations = stock_df["location_code"].tolist()
     all_locations = _locations(conn)

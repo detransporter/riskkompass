@@ -127,8 +127,8 @@ def _adjust_stock(conn: sqlite3.Connection, sku: str, location_code: str, delta:
     new_qty = (row["qty"] if row else 0.0) + delta
     if new_qty < 0:
         raise ValueError(
-            f"Insufficient stock: {sku} at {location_code} has "
-            f"{row['qty'] if row else 0.0}, cannot remove {-delta}"
+            f"Otillräckligt saldo: {sku} på {location_code} har "
+            f"{row['qty'] if row else 0.0}, kan inte ta bort {-delta}"
         )
     if row:
         conn.execute(
@@ -166,26 +166,26 @@ def record_transaction(
     """
     if txn_type == "receive":
         if not to_location:
-            raise ValueError("receive requires to_location")
+            raise ValueError("receive kräver to_location")
         _adjust_stock(conn, sku, to_location, qty)
     elif txn_type == "putaway":
         if not from_location or not to_location:
-            raise ValueError("putaway requires from_location and to_location")
+            raise ValueError("putaway kräver from_location och to_location")
         _adjust_stock(conn, sku, from_location, -qty)
         _adjust_stock(conn, sku, to_location, qty)
     elif txn_type == "pick":
         if not from_location:
-            raise ValueError("pick requires from_location")
+            raise ValueError("pick kräver from_location")
         _adjust_stock(conn, sku, from_location, -qty)
     elif txn_type == "adjust":
         location = to_location or from_location
         if not location:
-            raise ValueError("adjust requires to_location or from_location")
+            raise ValueError("adjust kräver to_location eller from_location")
         _adjust_stock(conn, sku, location, qty)
     elif txn_type in ("pack", "ship", "count"):
         pass
     else:
-        raise ValueError(f"unknown txn_type: {txn_type}")
+        raise ValueError(f"okänd txn_type: {txn_type}")
 
     cur = conn.execute(
         """

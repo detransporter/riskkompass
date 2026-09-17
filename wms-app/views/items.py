@@ -9,6 +9,7 @@ import streamlit as st
 
 import auth
 import db
+from components.sv import rename_columns
 
 LOCATION_TYPES = ["receiving", "picking", "bulk"]
 
@@ -74,7 +75,7 @@ def _render_items_tab(conn) -> None:
     st.divider()
     st.subheader(f"Artiklar")
     df = _items_df(conn)
-    st.dataframe(df, width="stretch", hide_index=True)
+    st.dataframe(rename_columns(df), width="stretch", hide_index=True)
     st.caption(f"{len(df)} artiklar")
 
 
@@ -105,7 +106,7 @@ def _render_locations_tab(conn) -> None:
     st.divider()
     st.subheader("Lagerplatser")
     df = _locations_df(conn)
-    st.dataframe(df, width="stretch", hide_index=True)
+    st.dataframe(rename_columns(df), width="stretch", hide_index=True)
     st.caption(f"{len(df)} platser")
 
 

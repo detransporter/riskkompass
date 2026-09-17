@@ -14,6 +14,7 @@ import streamlit as st
 
 import auth
 import db
+from components.sv import ORDER_STATUS_LABELS, rename_columns
 
 
 def _open_orders(conn: sqlite3.Connection) -> list[str]:
@@ -107,7 +108,7 @@ def _render_lines_tab(conn: sqlite3.Connection) -> None:
         "WHERE ol.order_no = ? ORDER BY ol.location_code, ol.line_no",
         conn, params=(order_no,),
     )
-    st.dataframe(lines, width="stretch", hide_index=True)
+    st.dataframe(rename_columns(lines), width="stretch", hide_index=True)
 
 
 def _render_all_orders_tab(conn: sqlite3.Connection) -> None:
@@ -117,7 +118,11 @@ def _render_all_orders_tab(conn: sqlite3.Connection) -> None:
         "WHERE order_type = 'outbound' ORDER BY created_at DESC",
         conn,
     )
-    st.dataframe(df, width="stretch", hide_index=True)
+    # Filtering below uses df's raw (English) status values from the DB;
+    # only the displayed copy gets the Swedish label swap.
+    display = df.copy()
+    display["status"] = display["status"].map(ORDER_STATUS_LABELS).fillna(display["status"])
+    st.dataframe(rename_columns(display), width="stretch", hide_index=True)
 
     packed = df.loc[df["status"] == "packed", "order_no"].tolist() if not df.empty else []
     if packed:

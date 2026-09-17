@@ -14,6 +14,8 @@ import streamlit as st
 
 import auth
 import db
+from components.export import excel_download_button
+from components.sv import rename_columns
 
 
 def _stock_df(conn) -> pd.DataFrame:
@@ -85,10 +87,12 @@ def render(user: auth.User) -> None:
             totals = df.groupby(["sku", "description"], as_index=False)["qty"].sum()
             totals = totals.rename(columns={"qty": "totalt_saldo"})
             st.subheader("Totalt per artikel")
-            st.dataframe(totals, width="stretch", hide_index=True)
+            st.dataframe(rename_columns(totals), width="stretch", hide_index=True)
+            excel_download_button(rename_columns(totals), "lagersaldo_totalt.xlsx", key="export_totals")
 
             st.subheader("Per lagerplats")
-            st.dataframe(df, width="stretch", hide_index=True)
+            st.dataframe(rename_columns(df), width="stretch", hide_index=True)
+            excel_download_button(rename_columns(df), "lagersaldo_per_plats.xlsx", key="export_per_location")
 
         st.divider()
         _render_adjust_form(conn, user)

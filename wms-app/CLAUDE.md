@@ -104,6 +104,102 @@ and confirmed in the browser: every number — DOS, status, ABC tier, and the
 full bridge (justified/excess/dead/deficit) — matched hand calculation
 exactly, including the bridge's SEK totals down to the unit.
 
+## Expanded IHA report + Excel export (built 2026-09-16, post-milestone-3)
+
+Added on request after reviewing what milestone 3 deliberately left out. Four
+more vendored/wired-in analyses, all "almost free" because the logic already
+existed in `analysis/lead_time.py`/`segmentation.py` or was a tiny, dependency-free
+file (`health_scorer.py`, 51 lines, pure pandas — vendored unchanged):
+
+- **Lagerhälsopoäng** — `health_scorer.compute_health_score()`, ABC-weighted
+  0–100 score, shown as the first metric on the report so there's one number
+  to glance at before the detail.
+- **Trend** — `trend_class` was already computed by `segment()` but never
+  surfaced; now has its own breakdown section and a column in the item
+  table. Needs **≥6 complete months** of pick history
+  (`2 * TREND_WINDOW` in `segmentation.py`) or it stays `None` for every
+  SKU — verified both ways: `test_analysis_bridge.py`'s fixture (4 complete
+  months) asserts trend stays unclassified; a separate live-browser check
+  with 230 days of history got a real item correctly classified `growing`.
+- **Leverantörsanalys** — `lead_time.supplier_scorecard()` +
+  `supplier_flags()`, wired in for the first time. Verified live: two
+  suppliers where one holds 90% of inventory value correctly triggered the
+  `>40%` concentration-risk flag. The flag *text* is hardcoded English in
+  the vendored source; the UI calls `components/sv.py:supplier_flags_sv()`
+  instead (a parallel Swedish implementation, same thresholds imported from
+  `lead_time.py` so they can't drift) — see "All UI text in Swedish" below.
+- **Ledtidsavstämning** — `lead_time.lead_time_reconciliation()`. Given the
+  known MVP limitation documented above (no inbound order-date tracking),
+  this always reports `measured_skus: 0` today — the UI shows an explicit
+  explanatory caption instead of a confusing empty section rather than
+  hiding the section outright, so it's clear the feature exists and why
+  it's not populated yet.
+- **Excel export** — `components/export.py:excel_download_button()`, same
+  `io.BytesIO` + `st.download_button` pattern as `iha-saas/pages/results.py`.
+  Added to the IHA report's item table and supplier scorecard, and to both
+  Lagersaldo tables. Requires `openpyxl` (added to `requirements.txt`).
+  Verified by actually downloading a file through the browser and loading
+  it back with `openpyxl` — real file, correct headers, correct data, not
+  just "the button renders."
+
+## All UI text in Swedish (built 2026-09-17)
+
+On request: every English string a user could actually see was found and
+translated. The vendored `analysis/*.py` files have English column names,
+status values, and prose baked in (that's the source, unchanged per the
+vendoring rule above) — so translation happens in **`components/sv.py`**,
+one layer between the analysis output and `st.dataframe`/`st.error`/etc.,
+never inside `analysis/*.py` itself:
+
+- `STATUS_LABELS`, `STATUS_REASON_LABELS`, `TREND_LABELS`,
+  `ORDER_STATUS_LABELS`, `POLICY_LABELS`, `ROOT_CAUSE_LABELS` /
+  `ROOT_CAUSE_ACTIONS` — value-translation dicts, applied with
+  `.map(...).fillna(original)` so an unmapped value degrades to the raw
+  value instead of `NaN`.
+- `COLUMN_LABELS` + `rename_columns(df)` — one shared header-rename map
+  applied to every `st.dataframe()`/`excel_download_button()` call
+  app-wide (`views/items.py`, `stock.py`, `orders.py`, `pick.py`,
+  `transfer.py`, `iha_report.py`). Unknown columns pass through
+  untouched, so it's safe to apply blindly rather than enumerating each
+  table's exact columns.
+- `supplier_flags_sv()` — a parallel Swedish reimplementation of
+  `lead_time.supplier_flags()`, not a wrapper around it (the source
+  returns English sentences, not translatable fragments). Imports
+  `CONCENTRATION_LIMIT`/`ON_TIME_TARGET` from the vendored file so the
+  trigger thresholds can't drift between the two.
+- `translate_demand_note()` — regex-based, because `data_merge.py`'s
+  `sales_statistics()` returns a free-text English note, not a structured
+  value. Only handles the two note shapes reachable from wms-app's
+  SQL-fed pipeline (`sales_statistics()`'s "wide format" shape is
+  unreachable here — see analysis_bridge.py). Falls back to the raw
+  string, untranslated, if the vendored wording ever changes and the
+  regex stops matching — a silent pass-through was judged better than a
+  crash for a caption line.
+- `db.py`'s `record_transaction`/`_adjust_stock` `ValueError` messages
+  (e.g. "Otillräckligt saldo: ...") were translated directly at the
+  source, not through the sv.py layer — `db.py` isn't a vendored file,
+  nothing stops editing it directly. No test asserts on the exact message
+  text, only `except ValueError`, so this was safe to change freely.
+
+**Verified, not just "translated and hoped":** `test_analysis_bridge.py`
+asserts `supplier_flags_sv()` produces the Swedish concentration-risk
+flag (and *not* the English one) and that `translate_demand_note()`
+actually transforms a real note produced by `build_canonical()` rather
+than silently no-op'ing. Live browser walkthrough confirmed Swedish text
+in: item table headers/values, root-cause expanders, ABC×XYZ policy
+column, supplier analysis table + warning banner, order status column,
+and the `Otillräckligt saldo` error message triggered through the real
+Saldojustering form (not just read from source).
+
+**Deliberately still not done** (flagged to David, not started): demand
+forecasting (`demand_forecast.py` — heavy scipy/numba/statsmodels/statsforecast
+chain, the exact stack behind a real Streamlit Cloud incident documented in
+`iha-saas/CLAUDE.md`) and a dedicated reorder/påfyllnadslista view (medium
+effort, builds on data already computed — good next candidate). PDF/PPT
+export not started either; PPT in particular is a substantial module in
+`iha-saas` (915 lines/39 functions with matplotlib-rendered charts), not a
+quick add.
+
 ## Stock transfers (`views/transfer.py` — built 2026-09-16, post-milestone-3)
 
 Added after the three planned milestones, on request: a standalone "Flytta"
