@@ -1233,8 +1233,64 @@ surface -- real data's job in this phase, working as intended.
 
 Full test suite: 176 passing (7 standalone + 169 pytest) — 8 new this
 phase (4 in `tests/test_m3_loader.py`, 4 new `_clip_to_sane_bound` tests
-in `tests/test_models.py`). Not committed yet, same standing rule as
-every phase before it.
+in `tests/test_models.py`). Committed (`d0ed8ef`, pushed) — the
+FORECAST_SPEC.md-numbered phases (1-10) are now all done, with all ten
+committed and pushed.
+
+### Live-tenant adapter (`forecasting/data_wms.py`) — done, verified 2026-09-21
+
+Not a FORECAST_SPEC.md-numbered phase -- the spec's own Phase 1-10 plan
+never named this step, but every phase's docstring (from Phase 1 onward)
+flagged the same gap: forecasting/ stayed CSV-first against `datagen/v1`
+synthetic data the whole way through, and "a loader for wms-app's live
+SQLite tenant schema is a natural, separate adapter to add once a tenant
+has enough history to be worth forecasting" (forecasting/data.py's own
+words). Testbolaget AB's demo tenant (400 items, 3 years of generated
+history, see the wms-app demo-data section above) is exactly that --
+enough history to be worth it -- so this wires it up.
+
+`forecasting/data_wms.py` maps wms-app's live SQLite tables (`items`,
+`orders`/`order_lines`, `transactions`, `stock`) onto the EXACT column
+shapes `forecasting/data.py`'s CSV loaders already produce, so every
+downstream function (`build_demand_series`, `build_segment_table`,
+`run_backtest`, `build_supplier_lead_time_table`, `compute_policy`,
+`simulate_policy`, `forecasting/monitoring.py`) runs unmodified against a
+real tenant's own data -- zero changes needed to any file Phases 1-8
+already built. Real gaps in the live schema, stated in the adapter's own
+docstring rather than silently faked: no separate ordered-vs-received
+quantity for inbound receipts (qty_ordered = qty_received, since the live
+schema has no PO-line concept at all), and no reorder_point/safety_stock/
+moq/order_multiple columns on the live items table (defaults: moq=1,
+order_multiple=1, reorder_point=safety_stock=0) -- which in turn means
+Phase 7's "policy A vs policy B" comparison has no real policy A to
+compare against for a wms-app tenant; the live Streamlit page says so
+rather than fabricating one.
+
+`views/forecast_live.py` -- same 6 tabs as the demo page
+(`views/forecast_demo.py`), but computed LIVE per tenant rather than from
+precomputed files: at a few hundred items (not 3,000), the full
+10-model backtest takes ~60s (`st.cache_data`-cached per session, so
+only the first tab visit pays that cost, confirmed live: the second
+visit to a cached tab was instant). The Policy & frontier tab shows only
+the frontier curve, not a policy-A comparison, per the gap above.
+
+**Two real bugs caught by actually clicking through in a browser against
+Testbolaget AB's real data, not by reading the code** -- both were
+literal copy-paste survivors from `views/forecast_demo.py`'s i18n
+strings, which hardcode "500 artiklar"/"hela demodatan" because that
+page's own artifacts really are a fixed 500-item alert sample and the
+full demo set. Reused verbatim in the live page, both captions were
+simply FALSE there (Testbolaget AB has 400 items total, no 500-item
+sample, and it is not "the demo dataset"). Fixed with two new,
+count-aware keys (`forecast.live_alerts_header`, `forecast.live_quality_header`)
+instead of the shared demo-page ones. A worthwhile reminder that reusing
+UI copy across two data sources needs the same scrutiny as reusing code
+-- a string that is accurate in one context can be silently wrong in
+another.
+
+Full test suite: 182 passing (7 standalone + 175 pytest) — 6 new
+(`tests/test_data_wms.py`, using a real throwaway tenant DB, same pattern
+`test_db.py` already established, not a mocked path). Not committed yet.
 
 ## Deployment (milestone 4 — in progress)
 

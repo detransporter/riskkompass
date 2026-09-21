@@ -30,6 +30,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "nav.reorder": {"sv": "Påfyllning", "en": "Replenishment"},
     "nav.iha": {"sv": "IHA-rapport", "en": "IHA report"},
     "nav.forecast_demo": {"sv": "Prognosmotor (demo)", "en": "Forecasting engine (demo)"},
+    "nav.forecast_live": {"sv": "Prognosmotor", "en": "Forecasting engine"},
 
     # ── app.py: login / register / sidebar chrome ───────────────────────
     "app.brand": {"sv": "📦 WMS", "en": "📦 WMS"},
@@ -520,6 +521,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "forecast.policy_stock_value_label": {"sv": "Lagervärde (SEK)", "en": "Stock value (SEK)"},
 
     "forecast.alerts_header": {"sv": "Larm (urval, 500 artiklar)", "en": "Alerts (sample, 500 items)"},
+    "forecast.live_alerts_header": {"sv": "Larm (alla {n} artiklar)", "en": "Alerts (all {n} items)"},
     "forecast.alerts_caption": {
         "sv": "Se CLAUDE.md Fas 8 för varför persistent_bias/demand_shift är överkänsliga vid "
               "standardinställningarna på just den här datan -- inte redo för produktion utan justering.",
@@ -530,6 +532,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "forecast.alerts_none": {"sv": "Inga larm matchar filtret.", "en": "No alerts match the filter."},
 
     "forecast.quality_header": {"sv": "Datakvalitet (hela demodatan)", "en": "Data quality (full demo dataset)"},
+    "forecast.live_quality_header": {"sv": "Datakvalitet ({n} artiklar)", "en": "Data quality ({n} items)"},
     "forecast.quality_censored_metric": {"sv": "Stockout-censurerade rader", "en": "Stockout-censored lines"},
     "forecast.quality_outlier_metric": {"sv": "Avvikande perioder (outliers)", "en": "Outlier periods"},
     "forecast.quality_oneoff_metric": {"sv": "Engångsordrar (avvikande)", "en": "One-off large orders"},
@@ -539,6 +542,38 @@ STRINGS: dict[str, dict[str, str]] = {
               "mänsklig granskning, inte som modellinput.",
         "en": "The level-shift flag is documented as NOT CALIBRATED (see forecasting/cleaning.py) -- "
               "for human review, not as model input.",
+    },
+
+    # ── views/forecast_live.py (docs/FORECAST_SPEC.md Phase 10+, live-tenant adapter) ──
+    "forecast.live_page_title": {"sv": "Prognosmotor", "en": "Forecasting engine"},
+    "forecast.live_page_caption": {
+        "sv": "Kör mot {company}s egna lagerdata -- inte demodatan. Se CLAUDE.md "
+              "\"forecasting/data_wms.py\" för vilka fält som saknas i den levande databasen "
+              "jämfört med den syntetiska demodatan (t.ex. ingen separat ordermängd för inleveranser).",
+        "en": "Runs against {company}'s own inventory data -- not the demo dataset. See CLAUDE.md "
+              "\"forecasting/data_wms.py\" for which fields the live database is missing compared to "
+              "the synthetic demo data (e.g. no separate ordered quantity for inbound receipts).",
+    },
+    "forecast.live_loading_spinner": {"sv": "Läser in data...", "en": "Loading data..."},
+    "forecast.live_backtest_spinner": {
+        "sv": "Kör backtest (tar upp till en minut första gången, cachas sedan)...",
+        "en": "Running backtest (takes up to a minute the first time, cached afterward)...",
+    },
+    "forecast.live_backtest_caption": {
+        "sv": "Backtest kört live mot denna artikelstock -- cachas per session, inte förberäknat.",
+        "en": "Backtest run live against this item stock -- cached per session, not precomputed.",
+    },
+    "forecast.live_no_policy_a_caption": {
+        "sv": "Ingen jämförelse mot \"nuvarande ERP-parametrar\" här -- wms-appens egen artikeltabell "
+              "har ingen beställningspunkt/säkerhetslager-koncept ännu (se forecasting/data_wms.py). "
+              "Kurvan visar bara den kvantilbaserade policyn vid olika målnivåer.",
+        "en": "No comparison against \"current ERP parameters\" here -- wms-app's own items table has "
+              "no reorder-point/safety-stock concept yet (see forecasting/data_wms.py). The curve shows "
+              "only the quantile-based policy at different target levels.",
+    },
+    "forecast.live_no_history_caption": {
+        "sv": "Inga utleveranser registrerade ännu -- inget att prognostisera på.",
+        "en": "No outbound deliveries recorded yet -- nothing to forecast from.",
     },
 }
 

@@ -25,6 +25,7 @@ from views import pick as page_pick
 from views import reorder as page_reorder
 from views import iha_report as page_iha_report
 from views import forecast_demo as page_forecast_demo
+from views import forecast_live as page_forecast_live
 
 st.set_page_config(page_title="WMS", page_icon="📦", layout="wide")
 
@@ -44,6 +45,7 @@ PAGES = {
     "reorder": page_reorder,
     "iha": page_iha_report,
     "forecast_demo": page_forecast_demo,
+    "forecast_live": page_forecast_live,
 }
 
 
