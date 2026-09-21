@@ -4,6 +4,15 @@ Multi-tenant warehouse management system with SQLite as the system of
 record, built for David's SME logistics-consulting clients. Full plan and
 rationale: `/Users/davidleifsson/.claude/plans/deep-tumbling-lagoon.md`.
 
+**Forecasting & inventory analytics module: governed by its own spec,
+@docs/FORECAST_SPEC.md — read it before touching anything under
+`forecasting/`, `datagen/`, or `config/forecast.yaml`.** It sets its own
+working agreement (Swedish communication, one phase at a time, no claims
+without backtest numbers, seeded determinism, no SQLite-only features, never
+commit customer data) that supersedes the general conventions below where
+the two would conflict for that code specifically. Progress against it is
+tracked in that phase's own section here, not duplicated in "Status" below.
+
 ## What this is, in one paragraph
 
 Every other lager-tool in this repo (`inventory-app`, `iha-saas`,
@@ -142,61 +151,102 @@ file (`health_scorer.py`, 51 lines, pure pandas — vendored unchanged):
   it back with `openpyxl` — real file, correct headers, correct data, not
   just "the button renders."
 
-## All UI text in Swedish (built 2026-09-17)
+## UI language: Swedish + English (built 2026-09-17, extended 2026-09-18)
 
-On request: every English string a user could actually see was found and
-translated. The vendored `analysis/*.py` files have English column names,
-status values, and prose baked in (that's the source, unchanged per the
-vendoring rule above) — so translation happens in **`components/sv.py`**,
-one layer between the analysis output and `st.dataframe`/`st.error`/etc.,
-never inside `analysis/*.py` itself:
+All UI text was first translated to Swedish (2026-09-17), then extended to a
+live sv/en language switcher (2026-09-18) after David asked "kan vi har wms
+på svenska och engelska?". Two layers, kept separate on purpose:
 
-- `STATUS_LABELS`, `STATUS_REASON_LABELS`, `TREND_LABELS`,
-  `ORDER_STATUS_LABELS`, `POLICY_LABELS`, `ROOT_CAUSE_LABELS` /
-  `ROOT_CAUSE_ACTIONS` — value-translation dicts, applied with
-  `.map(...).fillna(original)` so an unmapped value degrades to the raw
-  value instead of `NaN`.
-- `COLUMN_LABELS` + `rename_columns(df)` — one shared header-rename map
-  applied to every `st.dataframe()`/`excel_download_button()` call
-  app-wide (`views/items.py`, `stock.py`, `orders.py`, `pick.py`,
-  `transfer.py`, `iha_report.py`). Unknown columns pass through
-  untouched, so it's safe to apply blindly rather than enumerating each
-  table's exact columns.
-- `supplier_flags_sv()` — a parallel Swedish reimplementation of
-  `lead_time.supplier_flags()`, not a wrapper around it (the source
-  returns English sentences, not translatable fragments). Imports
-  `CONCENTRATION_LIMIT`/`ON_TIME_TARGET` from the vendored file so the
-  trigger thresholds can't drift between the two.
-- `translate_demand_note()` — regex-based, because `data_merge.py`'s
-  `sales_statistics()` returns a free-text English note, not a structured
-  value. Only handles the two note shapes reachable from wms-app's
-  SQL-fed pipeline (`sales_statistics()`'s "wide format" shape is
-  unreachable here — see analysis_bridge.py). Falls back to the raw
-  string, untranslated, if the vendored wording ever changes and the
-  regex stops matching — a silent pass-through was judged better than a
-  crash for a caption line.
-- `db.py`'s `record_transaction`/`_adjust_stock` `ValueError` messages
-  (e.g. "Otillräckligt saldo: ...") were translated directly at the
-  source, not through the sv.py layer — `db.py` isn't a vendored file,
-  nothing stops editing it directly. No test asserts on the exact message
-  text, only `except ValueError`, so this was safe to change freely.
+**`components/i18n.py`** — free-standing UI strings (nav labels, buttons,
+form labels, messages, errors) that don't come from the analysis pipeline.
+One flat `STRINGS` dict, `{key: {"sv": ..., "en": ...}}`, looked up via
+`t(key, **kwargs)` which reads the language from `st.session_state["lang"]`
+(default `"sv"`) and falls back to Swedish-then-the-raw-key if a translation
+is ever missing, so a gap degrades to visible-but-ugly rather than a crash.
+`language_switcher()` renders the sv/en radio (used on both the login
+screen and the sidebar) and writes the chosen language straight to session
+state — **deliberately does not call `st.rerun()`**, see the pitfall below.
 
-**Verified, not just "translated and hoped":** `test_analysis_bridge.py`
-asserts `supplier_flags_sv()` produces the Swedish concentration-risk
-flag (and *not* the English one) and that `translate_demand_note()`
-actually transforms a real note produced by `build_canonical()` rather
-than silently no-op'ing. Live browser walkthrough confirmed Swedish text
-in: item table headers/values, root-cause expanders, ABC×XYZ policy
-column, supplier analysis table + warning banner, order status column,
-and the `Otillräckligt saldo` error message triggered through the real
-Saldojustering form (not just read from source).
+**`components/sv.py`** — translation of data-driven labels coming out of
+the vendored `analysis/*.py` pipeline (English column names, status values,
+prose — unchanged per the vendoring rule above). Every `*_LABELS` dict now
+has an `_EN` twin (e.g. `STATUS_LABELS` / `STATUS_LABELS_EN`), selected via
+a `*_labels(lang)` helper (`status_labels`, `trend_labels`,
+`order_status_labels`, `policy_labels`, `root_cause_labels`,
+`root_cause_actions`). `rename_columns(df, lang)`, `supplier_flags_sv(df,
+lang)`, and `translate_demand_note(note, lang)` all default `lang="sv"` so
+every pre-existing call site (and `test_analysis_bridge.py`, which asserts
+Swedish output) kept working unchanged; view code now passes
+`lang=get_lang()` explicitly. `translate_demand_note` just returns the note
+unchanged for `lang="en"` — the vendored note is already English prose, so
+only the Swedish path needs the regex rewrite.
+
+`auth.py` (`password_problem`, `register_company`, `login`) and
+`db.record_transaction`/`_adjust_stock` (the "Otillräckligt saldo" /
+"Insufficient stock" error) both grew an explicit `lang: str = "sv"`
+parameter, called with `lang=get_lang()` from `app.py`/the views. Default
+stays `"sv"` so `test_auth.py`/`test_db.py` (which only assert
+`except ValueError`/truthy-error, never exact text) needed no changes.
+
+**`views/import_data.py`'s field tuples changed shape**: `ITEM_FIELDS` /
+`LOCATION_FIELDS` / `STOCK_FIELDS` used to be `(field, swedish_label,
+required)`; the label is now looked up at render time via `t(FIELD_LABEL_KEYS[field])`
+instead, so the tuples are just `(field, required)`. `guess_mapping()`'s
+unpacking was updated to match. `test_import.py` passes these constants
+straight through to `guess_mapping()` without inspecting their shape, so it
+needed no changes — worth knowing if that test ever gets extended to check
+field labels directly.
+
+**Pitfall hit and fixed live (important if touching `app.py`'s sidebar
+again):** the sidebar nav (`st.radio` over the page list) lost its
+selection — visibly and functionally — every time the language was
+switched. Root-caused in the browser, not guessed:
+1. `language_switcher()` originally called `st.rerun()` the moment it
+   detected a change. That aborts the *current* script pass immediately,
+   before the nav radio widget (rendered later in the same sidebar block)
+   ever executes. Streamlit garbage-collects session state for widgets not
+   rendered in a completed run, so the nav radio's remembered page was
+   wiped — reruns landed back on the first page. **Fix: don't call
+   `st.rerun()` there at all.** Streamlit already reruns the script on any
+   widget change; code below the language switcher in the same pass
+   already sees the new language via `get_lang()`, no manual rerun needed.
+2. Even after that fix, the nav radio's *visual* selection (which circle
+   is filled) still went blank on a language switch, even though the
+   correct page kept rendering — Streamlit's radio/selectbox reconciles a
+   keyed widget's selection against its *rendered option text*, and
+   `format_func` changing that text between reruns (Swedish → English
+   labels) desyncs the frontend highlight independent of the underlying
+   value (confirmed this isn't an int-vs-string identity issue either).
+   **Fix:** track the current page in `st.session_state["current_page_id"]`
+   ourselves, and key the radio as `f"nav_radio_{lang}_{current}"` — a
+   composite key that changes whenever language *or* page changes, forcing
+   Streamlit to treat it as a fresh widget mount that always honors the
+   explicit `index=` we pass, rather than trying to reconcile stale
+   frontend state against newly-translated labels.
+
+**Verified live in the browser, not just read from source:** registered a
+company in English (full register form translated), confirmed the language
+choice persists into the logged-in session (sidebar, nav, page titles),
+seeded 200+ real transactions and ran the IHA report end to end in both
+languages (health score, KPIs, status/trend breakdowns, ABC×XYZ matrix,
+supplier analysis + concentration-risk warning banner, Excel export button
+label), and specifically re-tested the nav-desync pitfall above by
+navigating to IHA-rapport → switching to English → confirming both the page
+content *and* the sidebar highlight stayed correct, then switching languages
+repeatedly while also changing pages to confirm normal navigation still
+works. Full test suite (`test_db.py`, `test_auth.py`, `test_orders_pick.py`,
+`test_transfer.py`, `test_analysis_bridge.py`, `test_import.py`) re-run and
+passing after every step of this change.
 
 **Deliberately still not done** (flagged to David, not started): demand
 forecasting (`demand_forecast.py` — heavy scipy/numba/statsmodels/statsforecast
 chain, the exact stack behind a real Streamlit Cloud incident documented in
 `iha-saas/CLAUDE.md`). PDF/PPT export not started either; PPT in particular
 is a substantial module in `iha-saas` (915 lines/39 functions with
-matplotlib-rendered charts), not a quick add.
+matplotlib-rendered charts), not a quick add. Language choice is
+per-browser-session only (same limitation as login — lost on a hard
+refresh), not saved per user account; see the "per användarkonto" option
+David didn't pick when asked.
 
 ## Påfyllningslista (`views/reorder.py` — built 2026-09-17)
 
@@ -274,7 +324,209 @@ session state the scan path sets, so step 2 (confirm) is identical either
 way. Verified live: picking SKU-100 from the dropdown landed on the same
 confirm screen as scanning it would.
 
-## Deployment (not yet built — milestone 4)
+## Demand forecasting engine (steps 1–2 built 2026-09-20, not yet exposed in the UI)
+
+Ported from `iha-saas` on request, after David flagged the existing ABC/DOS/
+XYZ/root-cause analysis as purely diagnostic ("en snapshot av verkligheten")
+and asked specifically for the forecasting engine to go deeper than "medel
+plus svängning" (ETS is literally an exponentially weighted moving average;
+Croston/SBA/TSB are literally average demand size ÷ average interval — an
+accurate, not unfair, characterization of what was there before this).
+Research and a phased roadmap live in a Claude Artifact built during that
+conversation (not part of this repo) before any code changed — read that
+first if extending this further, it has the paradigm comparison (global ML
+models / time-series foundation models / hierarchical reconciliation) and
+why foundation-model cold-start forecasting (Chronos-Bolt, CPU-only, ARM
+compatibility unverified) is flagged as the highest-leverage next step, not
+yet attempted here.
+
+**What was actually done here is steps 1–2 of that roadmap only:** the data
+bridge and a straight vendor of the engine, not a new UI page, not the ETS
+conformal-interval extension, not the FVA/backtesting harness, not the
+Chronos spike. Those remain open.
+
+### `analysis/demand_forecast.py`, `analysis/simulation.py` — vendored unchanged
+Byte-for-byte copies from `iha-saas/analysis/`, same rule as every other
+vendored file in `analysis/` (never edit; re-vendor on upstream changes).
+`demand_forecast.py` classifies each SKU by demand pattern (Syntetos-Boylan:
+smooth/intermittent/erratic/lumpy) and routes to ETS (smooth) or
+Croston-SBA/TSB (everything else), plus `forecast_dead_stock_risk()` —
+compares the forecast against today's `classify_status()` verdict and flags
+`emerging` (healthy today, forecast says decline — the signal trailing DOS
+can't see yet), `confirmed`, `recovering`, `none`. `simulation.py` is the
+policy-scenario engine (`simulate()`): four levers (service level, lead
+time, lead-time reliability, batch size), recomputes *required* capital
+under different policies — "what happens if we shorten Supplier X's lead
+time by 20%" answered in SEK, not stock on hand.
+
+**Correction to the earlier research artifact, found while reading the code
+closely enough to actually wire it up:** Croston/SBA/TSB already use
+`statsforecast`'s `ConformalIntervals` (calibrated, not naively parametric)
+— the artifact originally suggested adding this as a quick win, which was
+wrong. The real remaining gap is the **ETS branch**, which still only uses
+AutoETS's native parametric interval. Since ETS is what runs for "smooth"
+demand — plausibly the most common class for steady B2B SME consumption —
+that is the actual next opportunity for tighter, better-calibrated forecast
+bands, not a generic "add conformal prediction" task.
+
+### `analysis_bridge.py:build_demand_history()` — the new piece
+`demand_forecast.py` wants a long-format `(sku, period, qty)` history with
+explicit zero rows for no-demand months but months before a SKU's own first
+transaction *absent entirely* (not zero — it didn't exist yet). That is a
+different shape from `build_canonical()`'s per-item summary row, and
+critically it is **not re-derived from scratch** here: it reads
+`demand_monthly_full`, a column `build_canonical()` already gets for free
+via `data_merge.sales_statistics()` (Shape 3, the `dmin`/`dmax`
+launch-masking logic documented in that file — `before_launch` mask on the
+SKU × month pivot). `build_demand_history()` just melts that existing dict
+column into the long rows `demand_forecast.py` wants, so the two vendored
+IHA and forecasting pipelines can never disagree about which months a SKU
+"existed" in — they read the exact same masked matrix.
+
+### Dependencies — same pins as iha-saas, ARM compatibility unverified
+`requirements.txt` gained `statsforecast`/`scipy`/`numba`/`statsmodels` at
+the same version pins already proven working in `iha-saas/requirements.txt`
+(see that file and its CLAUDE.md for the Streamlit Cloud OOM incident these
+pins avoid — specific to that platform's build environment, not the
+libraries, but the pins matter regardless of host). Installed and verified
+importing cleanly on this dev machine (`pip install`, then a live import of
+every new symbol). **Not yet verified on the Oracle ARM (aarch64) VPS** this
+app actually deploys to — do a clean-install check there before relying on
+this in production, per the still-open item in the research artifact.
+
+### Verification
+`test_demand_forecast.py` — own throwaway tenant, real transaction data (a
+steady ~30-units/month SKU over 8 observed months, plus a just-launched SKU
+with only two transactions). Checks the actual contract end to end, not
+just that imports resolve: `build_demand_history()` produces exactly the
+`(sku, period, qty)` shape with no pre-launch periods leaking in;
+`classify_sbc()` reads the steady SKU as `smooth`; `select_forecast_method()`
+routes it to ETS and returns a forecast within a plausible range of its real
+history (avg ~30.3/month against an observed ~28–32/month), while the
+short-history SKU is correctly absent rather than given a fabricated
+forecast; `forecast_dead_stock_risk()` agrees the healthy SKU has no
+emerging risk; `simulate()` shows required capital genuinely drop (not a
+degenerate 0→0) when lead time is shortened 20%, confirmed against a SKU
+deliberately kept in the *healthy* DOS range — an earlier fixture draft
+accidentally left it overstocked into `dead_stock` territory, which zeroes
+out required capital by `simulation.py`'s own "a dead item requires
+nothing" rule and made the simulate() check trivially pass without
+exercising the actual lever logic; tightening the fixture caught that.
+Full existing suite (`test_db.py` through `test_import.py`) re-run and
+still passing after this change.
+
+### Still open (not built)
+New `views/forecast.py` page, the ETS conformal-interval extension, the
+FVA/backtesting harness, the Chronos-Bolt ARM spike — all as scoped in the
+research artifact, none started.
+
+### Superseded 2026-09-21 by @docs/FORECAST_SPEC.md
+The ad-hoc roadmap above (steps 1–2 from a Claude Artifact) is now governed
+by a formal spec instead: **@docs/FORECAST_SPEC.md**, with its own working
+agreement, phase numbering (1–10), and acceptance criteria — read it before
+touching `forecasting/`, `datagen/`, or `config/forecast.yaml`. The vendored
+`analysis/demand_forecast.py`/`analysis/simulation.py` and
+`analysis_bridge.py:build_demand_history()` above are unaffected and still
+current; the spec's Phase 4 ("models per segment") is where they get
+reused, not replaced.
+
+**Phase 1 (data layer + demand cleaning) — done, verified 2026-09-21.**
+Three prerequisites done first, per the spec owner's explicit instruction:
+- `datagen/v1/generera_lagerdata.py` — the reference synthetic generator
+  (3,000 items/4 years, `facit_dolda_egenskaper.csv` ground truth),
+  supplied by David, placed unmodified. Its `OUT_DIR` is a hardcoded
+  `/home/claude/lagerdata` path from wherever it was originally written —
+  do not edit it to fix this (Phase-1-and-later code should redirect via a
+  throwaway copy when it needs to actually run the generator, same as this
+  session did to produce `data/demo/`); reworking `OUT_DIR` into a real
+  parameter is datagen v2's job (spec section 6), not Phase 1's.
+- **Schema migration**: `transactions` gained nullable `po_date`/
+  `expected_date` columns (spec Phase 5 needs a real order date to compute
+  actual lead time). `schema/tenant.sql` has them for new tenants;
+  `db._migrate_tenant_db()` idempotently `ALTER TABLE`s them into existing
+  ones on every `get_tenant_conn()` call, verified against a simulated
+  pre-migration database (old schema → connect → columns appear, existing
+  row untouched, second call is a no-op). `db.record_transaction()` takes
+  them as optional kwargs; nothing in the app UI writes them yet (a receive
+  form field is a natural fast-follow, deliberately not done here — the
+  spec owner asked for exactly three prerequisites, not four).
+- **pytest**, scoped to `tests/` only via `pytest.ini` (`requirements-dev.txt`,
+  dev-only, pytest pinned there not in production requirements). The
+  existing `test_*.py` standalone scripts at the repo root are untouched, a
+  deliberate parallel convention, not a migration — `run_tests.sh` runs
+  both suites with one command and one exit code.
+
+**Dependency split, also done first:** `requirements-forecast.txt` now
+holds `statsforecast`/`scipy`/`numba`/`statsmodels` (moved out of
+`requirements.txt`, which stays core-app-only — nothing under `views/`
+imports forecasting code yet, so the app must keep running without this
+file installed, per the spec's "degrade gracefully" guardrail).
+`lightgbm`/conformal-helper deliberately NOT added yet (commented out in
+that file) — Phase 1–3 only need pandas/numpy/scipy.
+
+**ARM smoke test: prepared, blocked on VM access.** `scripts/
+smoke_test_forecast_deps.sh` (venv install + import + a real scipy.optimize
+fit, plus a bonus statsforecast-chain check) is ready but has not run — it
+needs to run *on* the Oracle instance, not locally, and this session does
+not have its IP or the downloaded private-key path. Ask David for both
+before claiming ARM compatibility either way.
+
+`forecasting/data.py` (loaders for the spec's outbound/inbound/items/stock
+CSV contract, a dependency-free Swedish public-holiday calendar via Gauss's
+Easter algorithm, `build_demand_series()`) and `forecasting/cleaning.py`
+(`flag_censored`/`flag_outliers`/`flag_one_off_large_orders`/
+`flag_level_shifts`) are CSV-first against `datagen/`'s synthetic estate,
+not DB-first against wms-app's live schema — a live tenant has at most a
+few weeks of real history right now, nowhere near enough to develop or
+validate a forecasting pipeline against. A live-schema adapter is future
+work, same adapter-not-rewrite shape as `analysis_bridge.py`.
+
+**Two real bugs found and fixed while verifying against the full 3,000-item
+demo set, not just the small pytest fixture** (`tests/fixtures.py`, 50
+items/6 months/fixed seed — generated fresh per test run, never reads
+`data/demo/`, per the working agreement):
+1. `series.groupby(...).apply(fn)` where `fn` returns a `pd.Series` is
+   ambiguous with exactly one group — observed transposing a single
+   article's boolean flags into a one-row DataFrame instead of aligning
+   them back to the original rows, silently wrong for every single-article
+   case. Fixed by replacing every such call in `cleaning.py` with an
+   explicit per-group loop + `pd.concat` (`_concat_per_article()`), which
+   has no such ambiguity regardless of group count.
+2. `flag_level_shifts()` flagged **99.5% of all 3,000 demo articles** at
+   least once before a fix — a ratio between two near-zero rolling-window
+   means (routine for a low-volume/intermittent article) is noise, not
+   signal, and was swinging past the shift threshold on essentially random
+   single small orders. Fixed with a `min_window_qty` floor (both windows
+   must clear it before a ratio is even computed); rate dropped to 65.5%
+   of articles / 9.33% of rows — still not backtest-validated (no ground
+   truth to check against until a later phase), reported as a first-pass
+   heuristic, not a validated result.
+
+**Real-data numbers** (full demo set, 449,456 outbound lines / 3,000
+items, measured on this dev machine): `build_demand_series()` 0.19s → 600,032
+article-week rows; `flag_censored` <0.01s, 18,227 lines (4.1%) — the demo
+generator's own reported fill rate (~0.96) matches; `flag_outliers` 0.31s,
+1,291 rows (0.22%); `flag_one_off_large_orders` 1.52s, 2,671 rows (0.45%);
+`flag_level_shifts` 0.84s, 55,964 rows (9.33%, post-fix). Total pipeline
+well under the spec's "a few minutes" bound.
+
+**Leakage tests** (`tests/test_leakage.py`, the working agreement's
+explicit requirement): `build_demand_series()` and `flag_censored()` are
+leakage-safe by construction, proven by shifting-future-data tests, not
+just asserted. `flag_level_shifts()` is also safe (strictly backward-
+looking rolling windows). `flag_outliers()`/`flag_one_off_large_orders()`
+are demonstrated to leak — future data in the same batch can flip a past
+period's flag — a real, proven property of using batch median/MAD or
+mean/std, documented prominently in `cleaning.py` so Phase 2's backtest
+does not reuse a batch run across rolling origins by accident.
+
+**Test count:** 7 standalone scripts + 28 pytest tests, one command
+(`./run_tests.sh`), all passing.
+
+**Not done:** `forecasting/models/`, `metrics.py`, `backtest.py` (Phase
+2) — next up.
+
+## Deployment (milestone 4 — in progress)
 
 Target: **0 kr/month.** Oracle Cloud "Always Free" ARM VPS (not Streamlit
 Cloud — it has no persistent disk, and this app's whole point is to own a
@@ -303,9 +555,16 @@ failure with no backup is total data loss for every tenant.
   open order line and pre-fills the confirm quantity to whatever remains.
 - **Milestone 3 (IHA integration) — done, verified 2026-09-16.** See "IHA
   integration" above for the full verification detail.
-- **Milestone 4 (deployment) — not started.** Needs David to create the
-  Oracle Cloud account himself (requires a card at signup, even though free)
-  and confirm where `barisab.com` DNS is managed before this can proceed.
+- **Milestone 4 (deployment) — in progress, started 2026-09-18.** Oracle
+  Cloud Free Tier account created, `wms-app` Ampere A1 (VM.Standard.A1.Flex,
+  Always Free-eligible) instance being provisioned in Sweden Central
+  (Stockholm) — David working through the Networking/SSH-key steps of the
+  console wizard directly. Not yet reached: instance running, app installed,
+  DNS (`wms.barisab.com`) pointed at it, HTTPS via Caddy.
+- **Demand forecasting — steps 1–2 of the roadmap done, 2026-09-20.** See
+  "Demand forecasting engine" above. Vendored engine + the new
+  `build_demand_history()` bridge, verified with a real end-to-end test —
+  not yet exposed as an app page.
 
 ## Barcode scanning (milestone 2 — built)
 

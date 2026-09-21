@@ -1,0 +1,46 @@
+# Tunables for the forecasting module (docs/FORECAST_SPEC.md). Every
+# threshold a phase's logic depends on lives here, not hardcoded in
+# forecasting/*.py -- so a value can be revisited without hunting through
+# code, and so two runs with the same config are the same run.
+#
+# Phase-numbered sections below track the spec's own phase numbers.
+# Only Phase 1's keys are used by code that exists so far.
+
+random_seed: 42
+
+# ── Phase 1: data layer and demand cleaning ─────────────────────────────
+data:
+  # Aggregation frequency for the demand series data.py builds. pandas
+  # offset aliases: "W" (weekly, week ending Sunday), "M" (month end).
+  frequency: "W"
+  business_calendar_country: "SE"
+
+cleaning:
+  # Outlier flag: modified z-score via MAD (median absolute deviation),
+  # not a plain std-dev threshold -- intermittent/lumpy demand already has
+  # huge natural variance, so std-dev would flag half of every lumpy
+  # article's real demand as "outliers". Iglewicz & Hoaglin's commonly
+  # cited threshold is 3.5; 6.0 here is deliberately more conservative
+  # (fewer false positives) since this flags for human review, not
+  # automatic exclusion -- revisit once Phase 2's backtest can show
+  # whether excluded/kept outliers actually change accuracy.
+  outlier_mad_multiplier: 6.0
+
+  # One-off large order flag: z-score computed on NONZERO periods only
+  # (see cleaning.py docstring for why), threshold in standard deviations.
+  one_off_z_threshold: 4.0
+
+  # Level shift flag: ratio between a trailing window's mean and the
+  # window immediately before it. window is in periods (at `frequency`
+  # above); shift_ratio triggers on ratio > shift_ratio OR < 1/shift_ratio
+  # (a level shift can go either direction -- demand ramping up or
+  # collapsing are both real level shifts, not just the down case that
+  # matters for obsolescence detection).
+  level_shift_window: 6
+  level_shift_ratio: 2.5
+  # Both the recent and prior window means must clear this before a ratio
+  # is even computed -- a ratio between two near-zero numbers is noise for
+  # a low-volume/intermittent article, not a real shift. Found and fixed
+  # against the full demo set: without this guard, 99.5% of all 3,000 demo
+  # articles got at least one spurious flag (see cleaning.py docstring).
+  level_shift_min_window_qty: 1.0
