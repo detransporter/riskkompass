@@ -61,3 +61,22 @@ backtest:
   # coverage intervals; 0.5/0.8/0.9/0.95 are the pinball-loss quantiles
   # docs/FORECAST_SPEC.md Phase 2 explicitly asks for.
   quantiles: [0.05, 0.1, 0.5, 0.8, 0.9, 0.95]
+
+# ── Phase 5: probabilistic lead-time demand ─────────────────────────────
+probabilistic:
+  review_period_days: 7
+  n_simulations: 1000
+  recent_window: 52          # weeks of recent demand history the lead-time-demand
+                              # bootstrap draws from -- see probabilistic.py's own
+                              # docstring for why this isn't the article's whole history
+  min_lead_time_samples: 5   # fewer than this: fall back to review-period-only (no lead-time spread)
+
+# ── Phase 6: policy (safety stock / reorder point / order quantity) ────
+policy:
+  # Both defaults match CLAUDE.md's own "Inventory Analysis Standards" --
+  # not invented for this module, the same numbers already quoted to clients.
+  holding_cost_rate: 0.22       # per year, fraction of unit cost
+  ordering_cost_sek: 400.0
+  abc_service_level: {A: 0.95, B: 0.90, C: 0.85}   # fallback when an item's margin is unknown
+  min_critical_ratio: 0.50
+  max_critical_ratio: 0.99      # a Monte Carlo distribution can't reliably estimate a tail beyond this

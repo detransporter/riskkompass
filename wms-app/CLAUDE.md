@@ -769,8 +769,160 @@ Full test suite: 104 passing (7 standalone + 97 pytest) — 17 new this
 phase (`tests/test_global_gbm.py`, `tests/test_ensemble.py`, plus the TSB/
 ETS/Theta/bootstrap additions to `tests/test_models.py`), including a
 leakage test that exercises the actual panel-training path (not just
-feature engineering) for the global model. Not committed, same standing
-rule as Phase 2/3.
+feature engineering) for the global model. Committed
+(`1c5fd79`, pushed).
+
+### Phase 5 (probabilistic lead-time demand, conformal calibration) — done, verified 2026-09-21
+
+Built `forecasting/probabilistic.py`: lead-time demand distribution via
+Monte Carlo (draw a lead time from its own empirical per-supplier
+distribution — `receipt_date - po_date` from `inleverans.csv`, "Open"
+lines excluded since they have no observed outcome yet, partial
+deliveries KEPT since the time-to-receipt is still real even when the
+quantity fell short — bootstrap that many periods of demand from the
+article's own recent history, same empirical-bootstrap mechanism
+`forecasting/models/intermittent.py:bootstrap_forecast()` already uses
+for lumpy demand, sum, repeat 500-1000x, take empirical quantiles), plus
+a small hand-written conformal calibration (conformalized quantile
+regression, Romano/Patterson/Candes 2019 — the finite-sample-exact
+correction-quantile formula, not mapie, per `requirements-forecast.txt`'s
+own note that this was always the plan).
+
+**Unlike Phase 4, this phase's results are a genuine win — reported with
+the same rigor either way, not oversold either direction:**
+
+`scripts/run_phase5_coverage.py` tests against **real historical PO
+receipts**, not synthetic ground truth on both sides: for all 22,018
+receivable PO lines with enough article history, predicts the lead-time
+demand distribution using ONLY data dated before that PO was placed
+(the article's demand history AND the supplier's lead-time sample both
+point-in-time filtered — `tests/test_probabilistic.py` proves the
+supplier filter specifically, since that one is easy to get wrong), then
+checks whether what the article's demand ACTUALLY summed to over that
+PO's REALIZED lead time + a 7-day review period fell inside the
+predicted interval. Calibration/test split is BY TIME (first 60%
+chronologically fits the conformal correction, last 40%, 8,808 events,
+is what coverage is reported against) — not a random split, which would
+leak "what a typical week looks like" across the boundary.
+
+Nominal 90% interval (q5-q95), against the spec's 87-93% target:
+
+| Segment | Raw coverage | Calibrated coverage | n (test set) |
+|---|---|---|---|
+| smooth | 87.7% (in range) | 92.1% | 114 |
+| erratic | 86.4% (just below) | **92.3%** | 2,012 |
+| intermittent | 94.9% (over, not under) | 94.9% (no correction fit) | 2,189 |
+| lumpy | 90.4% (in range) | 91.3% | 4,482 |
+| **ALL** | **90.6% (in range)** | **91.5%** | 8,808 |
+
+The overall number (90.6% raw, before any calibration) already lands
+inside the spec's 87-93% band. Per segment: smooth and lumpy are already
+in range raw; erratic is 0.6pp short raw but conformal calibration pulls
+it to 92.3%; intermittent OVER-covers (94.9%) rather than under-covers —
+exactly the direction the spec's "no systematic under-coverage on
+intermittent items" guardrail cares about, so this is a pass on the
+guardrail even though it sits above the tight 87-93% band (a wider-than-
+strictly-needed interval on intermittent, not a dangerous one). The
+conformal correction for intermittent came out at ~0 on the calibration
+set, so nothing pulled it back toward the band — worth a closer look
+later if a tighter intermittent interval matters operationally, not
+urgent given the guardrail itself is satisfied.
+
+**Caveat, stated plainly:** `smooth` has only 13 articles in the whole
+demo set (114 test-set events total) — read that row's numbers as a
+much smaller-sample result than the other three.
+
+**Also computed, not spec-gated:** the 80% interval (q10-q90) sits
+further from its analogous target (75-83% raw across segments,
+83% ALL) — the spec only states an explicit target for the 90% case, so
+this is reported for completeness, not treated as a miss.
+
+**Not done / explicitly deferred:** `lead_time_demand_distribution()`'s
+recent-history bootstrap window (`recent_window=52` weeks) is a fixed
+default, not itself backtested against alternatives; the conformal
+correction is a single scalar per segment (not conditional on volume or
+article-level covariates — full conformalized quantile regression can
+condition on more than just the segment, a refinement, not required to
+hit this phase's stated accept criterion); Phase 5's `policy.py`
+(safety stock / reorder point FROM these quantiles) is Phase 6, not
+started.
+
+Full test suite: 118 passing (7 standalone + 111 pytest) — 14 new this
+phase (`tests/test_probabilistic.py`), including a leakage test proving a
+delivery received after `as_of` cannot appear in the lead-time sample
+used to predict at that `as_of`. Not committed, same standing rule as
+every phase before it.
+
+### Phase 6 (policy from quantiles) — done, verified 2026-09-21
+
+Built `forecasting/policy.py` (target service level via the newsvendor
+critical ratio Cu/(Cu+Co), reorder point = the lead-time demand
+distribution's quantile AT that service level, safety stock = that
+quantile minus the distribution's MEAN -- reusing Phase 5's Monte Carlo
+machinery unchanged rather than a normal-distribution safety-stock
+formula that would not fit this intermittent/lumpy-dominated estate;
+EOQ-based order quantity, MOQ/order-multiple rounding, always up never
+down) and `forecasting/explain.py` (one Swedish paragraph per item,
+built entirely from real numbers already computed -- target service
+level and why, SBC segment plus coefficient of variation, the
+supplier's own observed lead-time spread with its actual sample count,
+and the real reorder-point/safety-stock/order-quantity figures -- no
+template placeholders, a driver that isn't available is left out of the
+sentence rather than faked).
+
+**Margin fallback used for 100% of items, stated plainly, not hidden:**
+the demo CSV data contract (`forecasting/data.py`'s `_ITEMS_COLS`) has no
+selling-price/margin column at all, so every one of the 3,000 demo items
+falls back to the ABC-tier service level (95%/90%/85% for A/B/C -- the
+same numbers CLAUDE.md's own "Inventory Analysis Standards" section
+already quotes to clients, not invented for this module). A real
+customer dataset with margin data would exercise `critical_ratio()`'s
+margin-based branch instead -- unit-tested directly
+(`test_critical_ratio_hand_computed`, `test_compute_policy_uses_margin_when_available`)
+even though nothing in the demo data reaches it.
+
+**Completeness check on the full 3,000-item demo set
+(`scripts/run_phase6_policy.py`), the phase's actual accept criterion --
+"explanations exist for all items and reference real drivers":**
+
+- **3,000/3,000 items succeeded, 0 errors** -- every item got both a
+  policy and a non-empty, driver-referencing explanation (asserted
+  directly in the script, not eyeballed).
+- ABC service-level split: A=95% (556 items), B=90% (815), C=85%
+  (1,629) -- matches the configured tiers exactly.
+- Safety stock as a share of expected lead-time demand, by segment:
+  smooth 69% (median 67%), erratic 89% (median 84%), lumpy 137% (median
+  113%), intermittent 146% (median 126%). Directionally exactly what
+  inventory theory predicts -- the more variable/sparse the demand
+  pattern, the bigger the safety buffer has to be RELATIVE to the
+  expected quantity, and intermittent/lumpy (the segments Phase 3 found
+  dominate this estate) need the largest relative buffers of all. A
+  sanity check this codebase's own numbers pass, not just a plausible
+  story.
+- 0/3,000 items fell back to the review-period-only lead-time
+  distribution (`n_lead_time_samples < 5`) -- every supplier in the demo
+  data has enough delivery history for a real empirical lead-time
+  spread, so `MIN_LEAD_TIME_SAMPLES`'s fallback path is unit-tested
+  directly rather than exercised on this dataset.
+
+**Not done / explicitly deferred:** `config/forecast.yaml`'s new
+`probabilistic:`/`policy:` sections are documented but not actually
+wired to a `load_config()` call inside `probabilistic.py`/`policy.py` --
+matches every earlier phase's own established pattern (module-level
+Python defaults mirror the yaml; nothing in `forecasting/` calls
+`load_config()` yet, Phase 1 through 6 alike), not a regression specific
+to this phase; a config-loading wire-up is a one-time cross-cutting
+change better done once, across every module, than piecemeal here.
+Stockout cost as an alternative to margin (spec says "selling margin OR
+stockout cost") not implemented -- margin was the more directly available
+concept to wire up given the demo data has neither, and a real customer
+dataset is far more likely to have a knowable selling price than an
+explicit stockout-cost estimate; can be added as a second optional
+`critical_ratio()` input later without changing its fallback behaviour.
+
+Full test suite: 140 passing (7 standalone + 133 pytest) — 22 new this
+phase (`tests/test_policy.py`, `tests/test_explain.py`). Not committed
+yet, same standing rule as every phase before it.
 
 ## Deployment (milestone 4 — in progress)
 
