@@ -921,8 +921,89 @@ explicit stockout-cost estimate; can be added as a second optional
 `critical_ratio()` input later without changing its fallback behaviour.
 
 Full test suite: 140 passing (7 standalone + 133 pytest) — 22 new this
-phase (`tests/test_policy.py`, `tests/test_explain.py`). Not committed
-yet, same standing rule as every phase before it.
+phase (`tests/test_policy.py`, `tests/test_explain.py`). Committed
+(`9ef8f91`, pushed).
+
+### Phase 7 (simulation as proof of value) — done, verified 2026-09-21
+
+Built `forecasting/simulate.py`: periodic-review inventory simulation
+(weekly, matching every other module's granularity) that replays each
+article's REAL historical demand under a reorder-point trigger, applying
+demand each period (unfulfilled demand is lost, not backordered),
+placing a replenishment when stock crosses the trigger, arriving after a
+lead time drawn from that supplier's own empirical distribution.
+`compare_policies()` runs policy A (the item's existing ERP
+`reorder_point`, already in `artiklar.csv`) and policy B (Phase 6's
+quantile-based reorder point) with the SAME order quantity and the SAME
+seeded lead-time draw sequence for both -- isolating the one thing this
+phase is actually testing (is the trigger point better calibrated) from
+everything else (order sizing, lead-time luck) that a naive A/B
+comparison could otherwise conflate.
+
+**Full demo set (3,000 items, `scripts/run_phase7_simulation.py`),
+demand-weighted:**
+
+| | Fill rate A (ERP) | Fill rate B (Phase 6) | Stock value A | Stock value B |
+|---|---|---|---|---|
+| **ALL** | 91.8% | **93.4%** | 34.6M SEK | **34.2M SEK** |
+| smooth (n=13) | 97.2% | 97.7% | 220k | 219k |
+| erratic (n=261) | 90.0% | 92.4% | 9.58M | 9.25M |
+| intermittent (n=1,266) | 93.7% | 93.3% | 8.26M | **7.85M** |
+| lumpy (n=1,420) | 93.2% | **94.1%** | 16.47M | 16.81M |
+
+Overall, policy B strictly dominates policy A on this demo set -- higher
+fill rate AND lower stock value at the same time, not a trade-off,
+meeting the spec's Phase 7 accept criterion in its stronger form ("higher
+fill rate at equal stock value" undersells this result; B beats A on
+both axes at once here). Reported segment-by-segment rather than just
+the headline number because the picture is NOT uniform, and pretending
+otherwise would violate the working agreement:
+- **smooth, erratic**: clean wins, both axes improve.
+- **intermittent**: NOT a clean win -- fill rate is very slightly lower
+  (93.3% vs 93.7%, −0.4pp) in exchange for meaningfully less stock value
+  (−4.9%). A real trade-off, stated as one, not spun as a win.
+- **lumpy**: the opposite trade -- higher fill rate (+0.9pp) bought with
+  more stock value (+2.1%).
+
+**Service-vs-stock-value frontier**, policy B re-run at fixed service
+levels 80/85/90/95/98% (see the script's own docstring for why "the
+baselines" in the spec's phrasing is interpreted this way -- Phase 2's
+"baselines" were forecast MODELS, a different concept that does not
+translate to a policy-level frontier):
+
+| Target | Fill rate | Stock value |
+|---|---|---|
+| 80% | 91.5% | 25.6M |
+| 85% | 92.2% | 28.0M |
+| 90% | 93.0% | 31.3M |
+| 95% | 93.9% | 36.7M |
+| 98% | 94.5% | 43.2M |
+
+Monotonic in both directions as it should be. Policy A (91.8%/34.6M) and
+policy B's own mixed-ABC-tier point (93.4%/34.2M) both land where the
+curve predicts they should relative to the single-level points around
+them -- an internal-consistency check this result passes, not just a
+plausible-looking number.
+
+**Stated per the spec's own instruction:** this demo data comes from a
+synthetic simulator (`datagen/v1`), so this proves the MACHINERY is
+internally correct (a quantile-based trigger genuinely outperforms a
+static ERP one when both are tested fairly on the same demand and lead
+times) -- it does not prove real-world performance. That is explicitly
+Phase 10's job, not claimed here.
+
+**Not done / explicitly deferred:** `n_orders_placed` (ordering
+frequency/cost) computed by `simulate_policy()` but not yet rolled into
+the portfolio summary printed by the script -- available in
+`data/phase7_simulation_results.csv` for a future ordering-cost
+comparison, not aggregated here since neither policy's order QUANTITY
+differs (only the trigger does, by this phase's own design), so ordering
+frequency differences are a secondary effect worth a closer look later,
+not the headline result.
+
+Full test suite: 147 passing (7 standalone + 140 pytest) — 7 new this
+phase (`tests/test_simulate.py`). Not committed yet, same standing rule
+as every phase before it.
 
 ## Deployment (milestone 4 — in progress)
 
