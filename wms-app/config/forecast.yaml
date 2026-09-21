@@ -44,3 +44,20 @@ cleaning:
   # against the full demo set: without this guard, 99.5% of all 3,000 demo
   # articles got at least one spurious flag (see cleaning.py docstring).
   level_shift_min_window_qty: 1.0
+
+# ── Phase 2: backtest ────────────────────────────────────────────────────
+backtest:
+  min_train_periods: 8      # fewer periods of history than this: no origin yet, wait
+  origin_step: 26            # periods between successive rolling origins (26 weeks = semi-annual --
+                              # tuned for runtime on the full 3,000-item demo set: 13 (quarterly)
+                              # measured ~8 min for 6 models x 3 horizons, 26 measured ~4 min)
+  fixed_horizons: [4, 13, 26]   # weeks, per docs/FORECAST_SPEC.md Phase 2
+  review_period_days: 7      # added to an item's lead_time_days for the lead-time-aligned horizon
+  season_length: 52          # weeks, for seasonal_naive
+  moving_average_window: 8
+  ses_alpha: 0.3
+  croston_alpha: 0.1
+  # Quantiles requested by models: 0.05/0.95 and 0.1/0.9 form the 90%/80%
+  # coverage intervals; 0.5/0.8/0.9/0.95 are the pinball-loss quantiles
+  # docs/FORECAST_SPEC.md Phase 2 explicitly asks for.
+  quantiles: [0.05, 0.1, 0.5, 0.8, 0.9, 0.95]

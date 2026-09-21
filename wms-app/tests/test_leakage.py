@@ -173,3 +173,67 @@ def test_flag_one_off_large_orders_batch_statistics_leak_future_information():
         "(demonstrating leakage) -- see flag_outliers leakage test above for why "
         "this matters for Phase 2's backtest"
     )
+
+
+# ── as_of: the actual fix, proven to close the gap the tests above found ──
+
+def test_flag_outliers_as_of_matches_the_past_only_run():
+    """The exact scenario that demonstrated leakage above, but calling
+    flag_outliers(full, as_of=cutoff) instead of flag_outliers(past) --
+    must reproduce the past-only result exactly, proving as_of actually
+    fixes the leakage rather than just papering over this one test."""
+    periods = pd.date_range("2026-01-05", periods=16, freq="W")
+    past_qty = [5, 4, 6, 5, 14, 5, 4, 6, 5, 4]
+    cutoff = periods[9]
+    past = pd.DataFrame({"article_id": ["A1"] * 10, "period": periods[:10], "qty_ordered": past_qty})
+    future_qty = [50, 55, 45, 60, 52, 48]
+    full = pd.concat([
+        past,
+        pd.DataFrame({"article_id": ["A1"] * 6, "period": periods[10:16], "qty_ordered": future_qty}),
+    ], ignore_index=True)
+
+    flags_past_only = flag_outliers(past, mad_multiplier=3.0)
+    flags_as_of = flag_outliers(full, mad_multiplier=3.0, as_of=cutoff)
+    pd.testing.assert_series_equal(flags_past_only, flags_as_of, check_names=False)
+
+
+def test_flag_one_off_large_orders_as_of_matches_the_past_only_run():
+    periods = pd.date_range("2026-01-05", periods=9, freq="W")
+    past_qty = [4, 5, 3, 10, 4, 5, 3, 4]
+    cutoff = periods[7]
+    past = pd.DataFrame({"article_id": ["A1"] * 8, "period": periods[:8], "qty_ordered": past_qty})
+    full = pd.concat([
+        past,
+        pd.DataFrame({"article_id": ["A1"], "period": [periods[8]], "qty_ordered": [800]}),
+    ], ignore_index=True)
+
+    flags_past_only = flag_one_off_large_orders(past, z_threshold=2.5)
+    flags_as_of = flag_one_off_large_orders(full, z_threshold=2.5, as_of=cutoff)
+    pd.testing.assert_series_equal(flags_past_only, flags_as_of, check_names=False)
+
+
+def test_flag_level_shifts_as_of_matches_the_past_only_run():
+    periods = pd.date_range("2026-01-05", periods=20, freq="W")
+    qty = [5] * 8 + [20] * 12
+    cutoff = periods[13]
+    past = pd.DataFrame({"article_id": ["A1"] * 14, "period": periods[:14], "qty_ordered": qty[:14]})
+    full = pd.DataFrame({"article_id": ["A1"] * 20, "period": periods, "qty_ordered": qty})
+
+    flags_past_only = flag_level_shifts(past, window=6)
+    flags_as_of = flag_level_shifts(full, window=6, as_of=cutoff)
+    pd.testing.assert_series_equal(flags_past_only, flags_as_of, check_names=False)
+
+
+def test_flag_censored_as_of_rows_after_cutoff_are_false_not_omitted():
+    """flag_censored's as_of contract differs deliberately from the other
+    three: row-wise flags are already leakage-safe, so as_of here only
+    zeroes out rows after the cutoff (never omits them) -- keeps the
+    returned Series aligned with the input's index for every caller,
+    matching the uniform convention the module docstring promises."""
+    outbound = pd.DataFrame([
+        _outbound_row("2026-01-05", "A1", 10, qty_shipped=6),   # censored, before cutoff
+        _outbound_row("2026-02-01", "A1", 10, qty_shipped=3),   # censored, AFTER cutoff
+    ])
+    result = flag_censored(outbound, as_of=pd.Timestamp("2026-01-15"))
+    assert result.tolist() == [True, False]
+    assert len(result) == len(outbound)  # same index, not filtered away

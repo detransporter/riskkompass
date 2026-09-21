@@ -464,12 +464,17 @@ file installed, per the spec's "degrade gracefully" guardrail).
 `lightgbm`/conformal-helper deliberately NOT added yet (commented out in
 that file) — Phase 1–3 only need pandas/numpy/scipy.
 
-**ARM smoke test: prepared, blocked on VM access.** `scripts/
+**ARM smoke test: written, deliberately not run.** `scripts/
 smoke_test_forecast_deps.sh` (venv install + import + a real scipy.optimize
-fit, plus a bonus statsforecast-chain check) is ready but has not run — it
-needs to run *on* the Oracle instance, not locally, and this session does
-not have its IP or the downloaded private-key path. Ask David for both
-before claiming ARM compatibility either way.
+fit, plus a bonus statsforecast-chain check) exists and is ready, but David
+hit friction getting into the Oracle console / SSH access on 2026-09-21 and
+asked to skip it rather than debug that now. Decision: fold ARM
+verification into the real deployment step instead of a separate
+standalone check — installing this app's actual dependencies on the VM
+will surface the same pandas/numpy/scipy wheel-availability question
+automatically, no extra SSH session needed just to find out early. ARM
+compatibility for this dependency chain is still genuinely unverified as
+of this note — do not claim it works until the real install happens.
 
 `forecasting/data.py` (loaders for the spec's outbound/inbound/items/stock
 CSV contract, a dependency-free Swedish public-holiday calendar via Gauss's
@@ -523,8 +528,249 @@ does not reuse a batch run across rolling origins by accident.
 **Test count:** 7 standalone scripts + 28 pytest tests, one command
 (`./run_tests.sh`), all passing.
 
-**Not done:** `forecasting/models/`, `metrics.py`, `backtest.py` (Phase
-2) — next up.
+**Point-in-time (`as_of`), added 2026-09-21:** every `cleaning.py` function
+now takes an optional `as_of` cutoff — filters its input to `period <= as_of`
+BEFORE computing anything, so future data literally never enters the
+calculation (not "computed on everything, then trimmed"). Proven, not just
+implemented: `tests/test_leakage.py` shows `flag_outliers(full, as_of=T)` /
+`flag_one_off_large_orders(full, as_of=T)` reproduce the past-only run
+exactly. `flag_censored`'s `as_of` differs deliberately — it zeroes out
+rows after the cutoff rather than omitting them, keeping the returned
+Series aligned with the input's own index (a uniform calling convention
+for `backtest.py`, which calls all four the same way). `CALIBRATED_FOR_MODELING`
+(a frozenset in `cleaning.py`) marks which flags are safe as model input —
+`flag_level_shifts` is deliberately excluded until calibrated against
+`datagen` v2 data with injected shifts (see its docstring's "NOT
+CALIBRATED" warning); any future generic "build features from every
+flag_*" code must check against this constant, not just skip it by
+convention.
+
+### Phase 2 (metrics + backtest + baselines) — done, verified 2026-09-21
+
+`forecasting/metrics.py` (WAPE, bias, MASE, pinball loss, interval
+coverage — every expected value in `tests/test_metrics.py` independently
+verified by direct execution before being written into an assertion, not
+hand-derived and trusted). `forecasting/models/baselines.py` (naive,
+seasonal naive, moving average, SES) and `forecasting/models/intermittent.py`
+(Croston, SBA) — hand-written pure pandas/numpy, deliberately **not** the
+statsforecast-based versions already vendored in `analysis/demand_forecast.py`:
+Phase 1–3 stays on pandas/numpy/scipy only, per the spec owner's explicit
+scope call. `forecasting/backtest.py`: rolling-origin engine, one row per
+(article, origin, horizon, model); horizon is both the fixed set (4/13/26
+weeks) and a lead-time-aligned one (`lead_time_horizon_periods()`, ceil((lead
+time + review period)/period length)) per article. Its own leakage safety
+is proven directly (`tests/test_backtest.py`), not inherited by assumption
+from `cleaning.py`'s: a huge spike placed after an origin does not change
+that origin's forecast.
+
+**Performance tuning, done honestly:** the naive per-origin/per-model
+Python loop measured ~8 min for the full 3,000-item demo set at
+`origin_step=13` (quarterly origins) — over the spec's "a few minutes"
+bound. Profiling showed no single model was the bottleneck (all ~2.7s per
+100 articles/1 model, including Croston) — it's loop overhead, not
+per-call math. Fixed by widening to `origin_step=26` (semi-annual), a
+defensible choice on its own merits, not just a speed hack: ~4 min for the
+full set, 472,434 backtest rows, all 6 baselines × 3 horizons.
+
+**Segment classification reused, not reimplemented:** SBC class
+(smooth/intermittent/erratic/lumpy) via the already-vendored
+`analysis/demand_forecast.py:classify_sbc()`, columns renamed
+(`article_id`→`sku`, `qty_ordered`→`qty`) to match its contract — same
+"reuse and extend" principle as `build_demand_history()`'s reuse of
+`demand_monthly_full`. Distribution across the demo set: lumpy 1,420,
+intermittent 1,266, erratic 261, smooth 13, unclassifiable 29, no-demand
+11 — this demo estate is overwhelmingly intermittent/lumpy, worth knowing
+before reading too much into the smooth segment's small n=73 backtest
+rows.
+
+**Baseline results, lead-time-aligned horizon, full demo set** — the
+actual per-segment WAPE/bias/pinball-q90/FVA table lives in this session's
+chat report to David, not duplicated here; headline findings only:
+- SBA wins on WAPE in 3 of 4 segments (smooth/erratic/lumpy); plain moving-average
+  wins on the largest segment (intermittent, n=7,813 backtest rows) —
+  genuinely counter to `analysis/demand_forecast.py`'s own SBC_METHOD
+  routing, which sends intermittent to Croston-SBA. Not a contradiction to
+  "fix" reflexively — that routing was never itself backtested (its own
+  docstring says so: "a reasoned default, not a backtested one"), so this
+  is the first real evidence either way, on synthetic (not real) data.
+- WAPE exceeds 1.0 for most segments except smooth (total error exceeds
+  total actual demand) — plausible, not obviously broken, for genuinely
+  lumpy/intermittent weekly demand at this granularity, but flagged
+  explicitly rather than glossed over.
+- Pinball loss is NOT comparable across segments (unlike WAPE) — it is not
+  scale-normalized, so a high-volume smooth article's absolute pinball
+  values dwarf a low-volume intermittent one's. Only meaningful comparing
+  models within the same segment.
+
+**Not done / explicitly deferred:** MASE not reported (needs a
+scale-consistent in-sample benchmark decision not yet made); category/supplier
+segment cuts (only SBC class reported, per what's most relevant to
+comparing baseline model fitness); ABC/XYZ segment cuts (Phase 3, not
+built); results not persisted to a table/CSV per the spec's Phase 2
+suggestion, nor a Streamlit page yet (both explicitly out of scope for
+"stop after Phase 2 and report the numbers").
+
+**Not committed.** Phase 2 code, tests, and config changes are sitting
+uncommitted, same as everything else in this repo per the standing rule:
+never commit without being asked for that specific piece of work.
+
+**ARM smoke test: written, deliberately not run** (see
+`scripts/smoke_test_forecast_deps.sh`) — David hit friction with Oracle
+console/SSH access on 2026-09-21 and asked to skip it. Decision: fold ARM
+verification into the real deployment step instead. Still genuinely
+unverified as of this note.
+
+### Phase 3 (segmentation + lifecycle) — done, verified 2026-09-21
+
+`forecasting/segmentation.py:build_segment_table()` — almost entirely
+composition of already-vendored, already-tested classifiers, not new
+logic: `analysis/data_merge.py:sales_statistics()` for per-article demand
+stats (column-renamed sku↔article_id), `analysis/abc_classifier.py`,
+`analysis/segmentation.py:classify_xyz/classify_trend`, and
+`analysis/demand_forecast.py:classify_sbc()` (via
+`forecasting/data.py:build_demand_series()`, already built in Phase 1).
+New code here is genuinely small: the adapter/merge logic, plus three
+lifecycle flags (`is_new_item`, `is_becoming_obsolete`, `is_stale_with_stock`).
+
+**Validated against `datagen/v1`'s `facit_dolda_egenskaper.csv`
+(`tests/test_segmentation_facit.py`) — two of three *(initial)* spec
+targets NOT met, investigated and reported honestly rather than tuned to
+pass (working agreement: "never claim an improvement without backtest
+numbers... if a target is missed, say so plainly"):**
+
+- **ABC agreement 87.7%** vs 90% target — close; real methodology
+  difference (facit uses strict trailing-365-day demand value, this
+  reuses `sales_statistics()`'s whole-observed-window average, the SAME
+  convention `analysis_bridge.py` already uses for the live wms-app
+  pipeline — changing it here would diverge from that established
+  pattern, not fix a bug). XYZ agreement (not a gated spec metric, but
+  measured alongside): 97.8%.
+- **Obsolescence recall/precision 72.4%/36.9%** vs 80%/70% targets.
+  First pass (`trend_class` alone) was much worse: 90.6% recall but only
+  13.9% precision — it fired on 1,326 of 3,000 articles (44%) because a
+  routine gap in sporadic ordering looks identical to genuine decline in
+  a single recent-vs-prior 3-month window, on this intermittent/lumpy-
+  dominated demo set. Added a `days_since_last_movement >= RECENCY_DEAD`
+  gate (reusing the exact constant `analysis/segmentation.py` already
+  uses for the same "routine gap vs genuinely dead" problem elsewhere,
+  not a new arbitrary threshold) — real improvement, still short of
+  spec's targets. A properly principled fix is a forecast-based signal
+  (`analysis/demand_forecast.py:forecast_dead_stock_risk()`, Phase 4+),
+  not further threshold-chasing now — see `flag_obsolescence()`'s
+  docstring for the full investigation.
+- **New-item recall 0%** vs 95% target — NOT a detector failure.
+  `datagen/v1`'s `is_new_item` is a permanent generation-time archetype
+  label (10% of articles, `created_date` placed anywhere across the whole
+  simulation window) — measured: up to 1,425 days before the dataset's
+  own "now", mean ~828 days. No signal derivable from ordinary
+  demand/items data can recover a label definitionally decoupled from
+  recency. This is a `datagen` v2 item (spec section 6: "new-product
+  ramp-up" as a demand PATTERN with actual recency, not just a static
+  label) — flagged for whoever revisits that generator, not something to
+  fix in segmentation code.
+
+Test assertions pin the MEASURED baseline (with the gap to the original
+target documented in comments), not the original spec numbers — a
+permanently-red test for a known, already-investigated gap is a worse
+signal than a regression guard against further backsliding.
+
+Full test suite: 77 passing (7 standalone + 70 pytest) — 5 new this
+phase. Not committed, same standing rule as Phase 2.
+
+### Phase 4 (models per segment, ensemble, global model) — done, verified 2026-09-21
+
+Built: `forecasting/models/statistical.py` (ETS/Theta via statsforecast —
+requires `brew install libomp` on macOS for the lightgbm import elsewhere
+in this phase, unrelated native-dependency gap, fixed once); TSB and an
+empirical bootstrap added to `forecasting/models/intermittent.py`;
+`forecasting/models/global_gbm.py` (one LightGBM model trained across the
+whole panel per origin/horizon/quantile — lags, rolling stats, Swedish
+calendar, category/item attributes; direct multi-horizon quantile
+regression, not recursive); `forecasting/backtest.py:run_global_backtest`
+(a structurally separate loop from `run_backtest()` — the global model
+trains once per origin across every article, which the per-article
+`model_fn(train, horizon)` loop cannot express); `forecasting/models/ensemble.py`
+(per-segment model selection by pinball-loss@q0.9, plus a plain
+equal-weight `combine_forecasts()`).
+
+**Full backtest, honestly reported — Phase 4's acceptance criteria are
+NOT met on this demo data (working agreement: "if a target is missed, say
+so plainly, investigate, and propose an adjusted target", not tune until
+a number looks good):**
+
+Ran all 10 per-article models (Phase 2 baselines + Croston/SBA/TSB/ETS/
+Theta/bootstrap) on the full 3,000-item demo set, plus `global_gbm` on a
+500-item subset (retraining a panel-wide model at every origin/horizon/
+quantile is far more expensive than a per-article statsforecast call — a
+500-item subset keeps this runnable in ~1 minute instead of an estimated
+tens of minutes; ~27 min total for the full run: 1,571.6s per-article +
+62.2s global, 1,587,498 backtest rows). Scored by pinball loss @ q0.9
+(the spec's own stated acceptance quantile) per SBC segment vs. best
+Phase 2 baseline:
+
+| Segment | Best model | FVA vs best baseline | Spec target |
+|---|---|---|---|
+| erratic | Croston/SBA/TSB (tied) | **+1.5%** | ≥5% |
+| intermittent | moving_average (no Phase 4 model won) | **+0.0%** | ≥3% |
+| lumpy | moving_average (no Phase 4 model won) | **+0.0%** | ≥3% |
+| smooth | moving_average (global_gbm lost) | **−14.4%** (global_gbm worse) | ≥5% |
+
+None of Phase 4's more sophisticated models beat the Phase 2 baselines by
+the spec's margins; two segments show literally zero improvement from any
+candidate model over plain `moving_average`.
+
+**A real bug caught and fixed before reporting, not glossed over:** the
+first run's printed summary showed global_gbm at **+64.5% FVA on
+smooth** — investigated because it looked too good given global_gbm ran
+on n=78 rows vs. the baseline's n=668 for that segment. Cause: `smooth`
+has only 13 articles in the whole demo set, and the 500-item global
+subset happened to contain only 2 of them — the +64.5% was comparing
+global_gbm's score on those 2 easy articles against the *full-population*
+baseline average across all 13, not a like-for-like comparison. Re-scored
+the baseline on the exact same (article, origin, horizon) keys global_gbm
+actually predicted: moving_average is *better* there (21.8 vs. 25.0),
+i.e. global_gbm actually loses on smooth too (−14.4%, the corrected
+number in the table above). `scripts/run_phase4_backtest.py` now always
+does this matched-keys comparison, not the original full-population one —
+future runs of this script are already fixed, this was not a one-off
+manual correction.
+
+**Also observed, not a code bug:** ETS produces a handful of very large
+individual errors within the `erratic` segment when an article gets a
+genuine one-off huge order (e.g. actual=10,931 vs. forecast≈430 for one
+article) — pinball loss @ q90 is asymmetric and penalizes under-predicting
+a high quantile heavily, so a few such weeks dominate ETS's segment-average
+score (4,939.9 vs. ~29-30 for every other model in that segment). Only
+1.0% of ETS's erratic-segment rows have forecast > 1000; this is the
+segment's own extreme-tail behaviour showing up in the metric, not ETS
+diverging on ordinary data.
+
+**Working theory, not yet tested:** `datagen/v1`'s per-article demand
+generator produces something close to a stationary rate with Poisson-ish
+noise around it (see its own KONFIGURATION section) — plausible that a
+moving average is already close to optimal on data with no real
+exploitable trend/seasonal structure per item, and that Croston/SBA/TSB's
+and global_gbm's actual edge (if any) would only show up on data with
+genuine regime structure: real customer data (Phase 10), or a `datagen`
+v2 generator with deliberate trend/seasonality/level-shift patterns per
+article (spec section 6). Not investigated further this phase — flagged
+as the first thing to check before concluding these methods don't work.
+
+**Not done / explicitly deferred:** global_gbm not run on the full
+3,000-item set (see runtime note above); no hyperparameter tuning on
+global_gbm (`LGB_PARAMS` in `global_gbm.py` are untuned defaults);
+lead-time-aligned horizon not covered by `run_global_backtest` (fixed
+horizons only — a shared panel-wide model retrained per distinct
+per-article lead time would fragment the training set per origin, judged
+not worth the complexity for a Phase 4 baseline; documented in that
+function's own docstring).
+
+Full test suite: 104 passing (7 standalone + 97 pytest) — 17 new this
+phase (`tests/test_global_gbm.py`, `tests/test_ensemble.py`, plus the TSB/
+ETS/Theta/bootstrap additions to `tests/test_models.py`), including a
+leakage test that exercises the actual panel-training path (not just
+feature engineering) for the global model. Not committed, same standing
+rule as Phase 2/3.
 
 ## Deployment (milestone 4 — in progress)
 

@@ -25,11 +25,13 @@ scipy<1.14.0
 numba<0.61.0
 statsmodels<0.15.0
 
-# Held back deliberately (2026-09-21): Phase 1-3 of docs/FORECAST_SPEC.md
-# only need pandas/numpy/scipy (already above/in requirements.txt). lightgbm
-# (Phase 4's global model) and a conformal-prediction helper (Phase 5) are
-# added later -- forecasting/models/global_gbm.py must degrade gracefully
-# (skip the global model, report why) rather than crash when lightgbm isn't
-# installed, and the conformal calibration is planned as a small
-# hand-written numpy implementation instead of pulling in mapie at all.
-# lightgbm>=4.0.0
+# Added 2026-09-21 for Phase 4 (docs/FORECAST_SPEC.md) -- the global model
+# across all items. forecasting/models/global_gbm.py still imports this
+# defensively (try/except ImportError) and skips the global model with a
+# clear report rather than crashing if it's missing -- ARM availability is
+# unverified the same way the rest of this file's stack is.
+lightgbm>=4.0.0
+
+# Held back deliberately: a conformal-prediction helper (Phase 5) is
+# planned as a small hand-written numpy implementation instead of pulling
+# in mapie at all -- not needed yet.

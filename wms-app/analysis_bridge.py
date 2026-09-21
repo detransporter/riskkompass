@@ -75,6 +75,38 @@ def build_canonical(conn: sqlite3.Connection) -> tuple[pd.DataFrame, str]:
     return df, demand_note
 
 
+def build_demand_history(canonical_df: pd.DataFrame) -> pd.DataFrame:
+    """Long-format (sku, period, qty) demand history for
+    analysis/demand_forecast.py's classify_sbc/forecast_* functions.
+
+    Reuses build_canonical()'s already-computed demand_monthly_full column
+    (a {period_str: qty} dict per SKU from data_merge.sales_statistics())
+    instead of re-querying and re-deriving it -- that column already applies
+    the exact masking demand_forecast.py itself requires: an explicit zero
+    for a month with no movement, but the month entirely ABSENT (not
+    zero-filled) before the SKU's own first transaction, so a SKU launched
+    partway through the tenant's history isn't penalized for months it
+    didn't exist in yet. See data_merge.py:_stats_from_matrix for where that
+    masking actually happens; nothing here re-derives it.
+
+    SKUs with no demand_monthly_full at all (never appeared in a pick/ship
+    transaction) are absent from the output entirely, not present with zero
+    rows -- matching classify_sbc()'s own "no rows at all" vs "no_demand
+    class" distinction (see that function's docstring).
+    """
+    if canonical_df.empty or "demand_monthly_full" not in canonical_df.columns:
+        return pd.DataFrame(columns=["sku", "period", "qty"])
+
+    rows = []
+    for _, row in canonical_df.iterrows():
+        monthly = row.get("demand_monthly_full")
+        if not isinstance(monthly, dict):
+            continue
+        for period, qty in monthly.items():
+            rows.append({"sku": row["sku"], "period": period, "qty": qty})
+    return pd.DataFrame(rows, columns=["sku", "period", "qty"])
+
+
 def run_analysis(df: pd.DataFrame) -> tuple[pd.DataFrame, dict]:
     """Same pipeline order as iha-saas/pages/upload.py:_run_analysis(),
     extended to also return the bridge summary dict (iha-saas discards it at

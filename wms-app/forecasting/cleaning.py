@@ -6,26 +6,35 @@ the observed value. The raw qty_ordered/qty_shipped stays the ground
 truth; downstream code (backtest, models) decides how much weight to give
 a flagged period. Thresholds live in config/forecast.yaml, not here.
 
-Leakage note, read before reusing these in Phase 2's backtest: flag_censored
-is per-row and inherently causal (a row's own qty_shipped vs qty_ordered
-never depends on any other row). flag_outliers/flag_one_off_large_orders/
-flag_level_shifts are BATCH statistics -- computed once over whatever
-series is passed in, using that series' own median/mean/std/rolling
-windows. Passed the full historical series (as intended here, for
-understanding overall data quality), a period's flag can be influenced by
-periods that come AFTER it chronologically. That is correct and useful for
-a one-off data-quality report, but it is data leakage if reused unchanged
-inside a rolling-origin backtest at some origin date T: a flag for period T
-must only be computed from data <= T there. flag_level_shifts is the one
-exception (its rolling/shift windows are already strictly backward-looking
-by construction), but flag_outliers and flag_one_off_large_orders are not.
-Phase 2 must recompute those per origin, not reuse a batch run -- see
-tests/test_leakage.py, which documents this distinction with a real test.
+Point-in-time (`as_of`), added 2026-09-21 after the leakage this module
+originally only documented was demonstrated with a real test
+(tests/test_leakage.py): every function here takes an optional `as_of`
+cutoff. When given, the function filters its input to the cutoff FIRST,
+before computing anything -- so it behaves exactly as if data after
+`as_of` never existed, not "computed on everything, then trimmed the
+output". flag_censored is row-wise and never needed this for correctness
+(a row's own qty_shipped vs qty_ordered never depends on any other row),
+but takes `as_of` too for a uniform calling convention -- Phase 2's
+backtest can call all four flag functions the same way at each rolling
+origin without special-casing one of them. Passing as_of=None (the
+default) reproduces the old "understand overall data quality" batch
+behaviour, appropriate for a one-off report but NOT for a backtest origin
+-- see tests/test_leakage.py for the proof that omitting as_of leaks.
 """
 
 from __future__ import annotations
 
 import pandas as pd
+
+# Flags safe to use as model input (Phase 4's feature engineering, or any
+# other consumer that treats a flag as a signal rather than a human-review
+# hint). flag_level_shifts is deliberately excluded -- see its docstring's
+# "NOT CALIBRATED" warning. Any code that builds a feature set generically
+# from "every flag_* function" must check against this, not just call them
+# all; a hardcoded exclusion living only in one function's docstring is too
+# easy to miss when a different phase's code is what actually does the
+# calling.
+CALIBRATED_FOR_MODELING = frozenset({"flag_censored", "flag_outliers", "flag_one_off_large_orders"})
 
 
 def _concat_per_article(series: pd.DataFrame, flag_fn) -> pd.Series:
@@ -51,16 +60,23 @@ def _concat_per_article(series: pd.DataFrame, flag_fn) -> pd.Series:
     return pd.concat(parts).sort_index()
 
 
-def flag_censored(outbound: pd.DataFrame) -> pd.Series:
+def flag_censored(outbound: pd.DataFrame, as_of: pd.Timestamp | str | None = None) -> pd.Series:
     """True where qty_shipped < qty_ordered: unconstrained demand
     (qty_ordered, the spec's demand definition) could not be fully
     observed that period -- a stockout-affected line. Purely row-wise, so
-    this alone never leaks (see module docstring)."""
-    return outbound["qty_shipped"] < outbound["qty_ordered"]
+    this alone never leaks regardless of as_of -- included for a uniform
+    calling convention with the other three flags (see module docstring).
+    Rows with order_date > as_of get False, not omitted, so the returned
+    Series always aligns with `outbound`'s own index."""
+    result = outbound["qty_shipped"] < outbound["qty_ordered"]
+    if as_of is not None:
+        result = result & (outbound["order_date"] <= as_of)
+    return result
 
 
 def flag_outliers(series: pd.DataFrame, qty_col: str = "qty_ordered",
-                  mad_multiplier: float = 6.0) -> pd.Series:
+                  mad_multiplier: float = 6.0,
+                  as_of: pd.Timestamp | str | None = None) -> pd.Series:
     """Per-article modified z-score outlier flag via MAD (median absolute
     deviation) -- robust to the fact that intermittent/lumpy demand already
     has huge natural variance, where a plain std-dev threshold would flag
@@ -68,7 +84,16 @@ def flag_outliers(series: pd.DataFrame, qty_col: str = "qty_ordered",
     z-score formulation (Iglewicz & Hoaglin): 0.6745 * (x - median) / MAD.
     An article whose demand never varies (MAD == 0) gets no flags at all,
     not a divide-by-zero -- constant demand cannot have an "outlier" by
-    this definition."""
+    this definition.
+
+    as_of: if given, `series` is filtered to period <= as_of BEFORE the
+    median/MAD are computed -- median/MAD from data after as_of never
+    enter the calculation at all (not computed-then-discarded). Rows with
+    period > as_of are absent from the returned Series, matching what a
+    backtest origin at as_of would actually have known."""
+    if as_of is not None:
+        series = series[series["period"] <= as_of]
+
     def _flag(group: pd.DataFrame) -> pd.Series:
         med = group[qty_col].median()
         mad = (group[qty_col] - med).abs().median()
@@ -81,7 +106,8 @@ def flag_outliers(series: pd.DataFrame, qty_col: str = "qty_ordered",
 
 
 def flag_one_off_large_orders(series: pd.DataFrame, qty_col: str = "qty_ordered",
-                              z_threshold: float = 4.0) -> pd.Series:
+                              z_threshold: float = 4.0,
+                              as_of: pd.Timestamp | str | None = None) -> pd.Series:
     """Per-article LEAVE-ONE-OUT z-score flag computed on NONZERO periods
     only. Leave-one-out (excluding the candidate point itself from the
     mean/std it is scored against), not a plain self-inclusive z-score --
@@ -106,7 +132,15 @@ def flag_one_off_large_orders(series: pd.DataFrame, qty_col: str = "qty_ordered"
     question). Fewer than 4 nonzero periods is not enough to leave one out
     and still have 2 degrees of freedom left for the remaining std -- no
     flags rather than a noisy one.
-    """
+
+    as_of: same contract as flag_outliers -- filters `series` to
+    period <= as_of before the leave-one-out mean/std are computed, so a
+    period after as_of can never enter another period's reference
+    statistic (the exact leakage tests/test_leakage.py demonstrated
+    without this parameter)."""
+    if as_of is not None:
+        series = series[series["period"] <= as_of]
+
     def _flag(group: pd.DataFrame) -> pd.Series:
         nonzero = group.loc[group[qty_col] > 0, qty_col]
         n = len(nonzero)
@@ -130,7 +164,8 @@ def flag_one_off_large_orders(series: pd.DataFrame, qty_col: str = "qty_ordered"
 
 def flag_level_shifts(series: pd.DataFrame, qty_col: str = "qty_ordered",
                       window: int = 6, shift_ratio: float = 2.5,
-                      min_window_qty: float = 1.0) -> pd.Series:
+                      min_window_qty: float = 1.0,
+                      as_of: pd.Timestamp | str | None = None) -> pd.Series:
     """Per-article level-shift flag: the ratio between a trailing
     `window`-period mean and the `window`-period mean immediately before
     it. A genuine step change shows as a SUSTAINED ratio jump across a
@@ -139,8 +174,11 @@ def flag_level_shifts(series: pd.DataFrame, qty_col: str = "qty_ordered",
     merged into this signal (same "two signals catch different failures"
     reasoning wms-app's DOS-vs-recency split already uses, see
     wms-app/CLAUDE.md). Both rolling windows here are strictly backward-
-    looking by construction -- the one flag in this module that is already
-    leakage-safe without recomputation per origin (see module docstring).
+    looking by construction, so this was already leakage-safe without an
+    as_of filter -- it is accepted here too purely for a uniform calling
+    convention (see module docstring), and because filtering first also
+    correctly drops any rolling window that would otherwise extend past
+    as_of at the series' tail.
 
     min_window_qty guards against a real bug found and fixed while
     verifying this against the full demo set: for a low-volume/intermittent
@@ -153,7 +191,17 @@ def flag_level_shifts(series: pd.DataFrame, qty_col: str = "qty_ordered",
     almost entirely on articles with weekly mean demand near zero (mean
     demand of flagged articles: ~20/week; of never-flagged articles:
     ~0.09/week -- flags were overwhelmingly noise, not signal). Both
-    windows must clear min_window_qty before a ratio is even computed."""
+    windows must clear min_window_qty before a ratio is even computed.
+
+    NOT CALIBRATED -- do not use as model input yet. This flag has not
+    been validated against ground truth (no backtest, no comparison
+    against datagen v2's injected level shifts once that exists). It is a
+    first-pass heuristic for human data-quality review only until that
+    calibration happens (see docs/FORECAST_SPEC.md Phase 3's facit-based
+    acceptance criteria for the validation this still needs)."""
+    if as_of is not None:
+        series = series[series["period"] <= as_of]
+
     def _flag(group: pd.DataFrame) -> pd.Series:
         g = group.sort_values("period")
         qty = g[qty_col]
