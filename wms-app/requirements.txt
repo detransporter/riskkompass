@@ -10,10 +10,9 @@ openpyxl>=3.1.0  # engine for df.to_excel() -- Excel export buttons (components/
 
 # sqlite3 is stdlib.
 #
-# Deliberately NOT vendored from iha-saas: analysis/demand_forecast.py
-# (SBC classification, ETS/Croston-SBA/TSB forecasting) and its
-# scipy/numba/statsmodels/statsforecast dependencies. That is real weight
-# (and the exact stack that caused the Streamlit Cloud build incident
-# documented in iha-saas/CLAUDE.md) for a feature outside milestone 3's
-# scope -- ABC/DOS/XYZ/lead-time/bridge only. Add it as its own milestone if
-# wanted later, matching those pins from iha-saas/requirements.txt exactly.
+# Forecasting-specific dependencies (statsforecast, scipy, numba, statsmodels,
+# and later lightgbm) live in requirements-forecast.txt, not here -- see that
+# file's comment. Nothing under views/ imports analysis/demand_forecast.py or
+# analysis/simulation.py yet (no forecast page exists), so the core app runs
+# fine without it installed; keep it that way as forecasting/ grows, per
+# docs/FORECAST_SPEC.md's "degrade gracefully" guardrail.

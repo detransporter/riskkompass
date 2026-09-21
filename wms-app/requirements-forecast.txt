@@ -1,0 +1,35 @@
+# Dependencies for the forecasting module (analysis/demand_forecast.py,
+# analysis/simulation.py, and the forecasting/ package built per
+# docs/FORECAST_SPEC.md). Deliberately separate from requirements.txt: the
+# core WMS app (items, stock, receive/pick, IHA report) does not import any
+# of this, and should keep running even where this file was never installed.
+#
+# Install alongside the core requirements:
+#   pip install -r requirements.txt -r requirements-forecast.txt
+#
+# Same pins as iha-saas/requirements.txt, the latest known-working
+# generation of this stack -- see that file's comment and
+# iha-saas/CLAUDE.md "Deployment & drift" for the Streamlit Cloud build
+# incident (pandas 3.0/numba/statsmodels wheel resolution) these pins avoid.
+# That incident was specific to Streamlit Cloud's own memory-constrained
+# build environment, not the libraries themselves, but the pins still
+# matter regardless of host.
+#
+# ARM (Oracle aarch64 VPS) compatibility: confirmed installing/importing on
+# an x86_64/arm64 Mac dev machine only, as of 2026-09-20. NOT yet verified
+# on the actual deploy target -- see the smoke-test script this pin change
+# was made alongside (scripts/smoke_test_forecast_deps.sh) and
+# docs/FORECAST_SPEC.md's open questions.
+statsforecast>=2.0.0
+scipy<1.14.0
+numba<0.61.0
+statsmodels<0.15.0
+
+# Held back deliberately (2026-09-21): Phase 1-3 of docs/FORECAST_SPEC.md
+# only need pandas/numpy/scipy (already above/in requirements.txt). lightgbm
+# (Phase 4's global model) and a conformal-prediction helper (Phase 5) are
+# added later -- forecasting/models/global_gbm.py must degrade gracefully
+# (skip the global model, report why) rather than crash when lightgbm isn't
+# installed, and the conformal calibration is planned as a small
+# hand-written numpy implementation instead of pulling in mapie at all.
+# lightgbm>=4.0.0

@@ -1,0 +1,13 @@
+# Tenant databases, directory.db -- never committed, per-deployment state.
+# data/demo/ specifically: generated synthetic demo data (datagen/), can be
+# large (the 3,000-item/4-year demo set is ~25MB of CSVs) and is
+# regenerable from datagen/v1/generera_lagerdata.py with a fixed seed --
+# no reason to version it. Real/anonymised customer data must never be
+# committed either (docs/FORECAST_SPEC.md working agreement) -- this same
+# data/ exclusion covers that too, since it is the one place either kind
+# of data lives.
+data/
+
+__pycache__/
+*.pyc
+.pytest_cache/

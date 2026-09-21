@@ -1,0 +1,13 @@
+# Development-only dependencies -- never installed in production. Separate
+# from requirements.txt and requirements-forecast.txt for the same reason
+# those two are separate from each other: a prod install should not pull in
+# anything a deployed app doesn't need to run.
+#
+# pytest is used only under tests/ (forecasting/'s fixtures and
+# parametrized tests -- the leakage test and per-segment backtest checks in
+# particular need it). The rest of the app's tests are the existing
+# standalone test_*.py scripts at the repo root and stay exactly as they
+# are -- see docs/FORECAST_SPEC.md's working agreement ("existing tests
+# left as they are") and run_tests.sh, which runs both suites with one
+# command.
+pytest>=8.0.0
