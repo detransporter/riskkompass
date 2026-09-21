@@ -75,11 +75,27 @@ def select_best_model_per_segment(scores: pd.DataFrame,
     """{segment: model_name}, the lowest-pinball-loss model per segment.
     An empty `scores` (e.g. no backtest results yet) returns an empty
     dict -- callers must handle a missing segment themselves (see
-    forecast_with_selection's FALLBACK_MODEL)."""
+    forecast_with_selection's FALLBACK_MODEL).
+
+    Ties are broken alphabetically by model name, deterministically --
+    NOT left to pandas' default sort. Several baselines routinely tie
+    EXACTLY on this codebase's own demo data (e.g. naive/moving_average/
+    seasonal_naive/ses all score 4.520776 on the lumpy segment, a real,
+    already-documented Phase 4 finding, not a rare edge case) and plain
+    `sort_values` uses quicksort by default, which pandas does NOT
+    guarantee is stable -- two runs of this exact function against the
+    exact same input were observed to pick a DIFFERENT winner among a
+    tied group purely from run-to-run sort order, not from any real
+    difference in score. That is a genuine reproducibility bug for a
+    number this project reports to a user (views/forecast_demo.py shows
+    the winning model's name on screen) -- the working agreement's "same
+    seed -> identical output" rule extends to this too, even though no
+    randomness is involved here, just an unstable sort.
+    """
     loss_col = f"pinball_q{int(round(quantile * 100))}"
     if scores.empty:
         return {}
-    best = scores.sort_values(loss_col).groupby("segment", as_index=False).first()
+    best = scores.sort_values([loss_col, "model"], kind="stable").groupby("segment", as_index=False).first()
     return dict(zip(best["segment"], best["model"]))
 
 

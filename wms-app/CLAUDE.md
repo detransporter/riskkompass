@@ -1002,8 +1002,168 @@ frequency differences are a secondary effect worth a closer look later,
 not the headline result.
 
 Full test suite: 147 passing (7 standalone + 140 pytest) — 7 new this
-phase (`tests/test_simulate.py`). Not committed yet, same standing rule
-as every phase before it.
+phase (`tests/test_simulate.py`). Committed (`55ff2c1`, pushed).
+
+### Phase 8 (monitoring and alerts) — done, verified 2026-09-21
+
+Built `forecasting/monitoring.py`: rolling WAPE/bias per (article, model)
+over a trailing window of origins, persistent-bias streak detection,
+coverage-breach detection (reusing Phase 5's own coverage-event shape),
+an obsolescence-risk categorizer (emerging/confirmed/recovering/none --
+same four-way shape as the older, superseded
+`analysis/demand_forecast.py:forecast_dead_stock_risk()`, reimplemented
+against this module's own contracts rather than bridging two
+incompatible forecasting engines, see that function's docstring for why),
+a simple OR-based auto-retrain trigger, and a manual-override log with
+Forecast Value Added of human overrides vs. the model. Adds no new
+forecasting logic of its own -- every signal is built from tables Phases
+1-5 already produce.
+
+**A real bug caught by investigating a surprising number, same discipline
+Phase 3 and Phase 4 already applied -- not glossed over:**
+
+`scripts/run_phase8_monitoring.py` first computed obsolescence risk using
+`naive_forecast` (repeats the last observed value) as the "fresh
+forecast" -- for the intermittent/lumpy demand dominating this estate,
+naive is 0 after any single empty period, which is routine, not a risk
+signal. Result: 1,657/3,000 articles (55%) flagged "emerging" risk --
+implausibly high, investigated rather than reported as-is. Root cause:
+the EXACT same false-positive trap Phase 3's `flag_obsolescence()`
+docstring already documents in detail (trend_class alone flagging 44% of
+articles before a recency gate fixed it) -- a routine gap in sporadic
+ordering looking identical to genuine decline. Fix: swap in TSB
+(`forecasting/models/intermittent.py:tsb_forecast`), which was
+specifically built in Phase 4 to decay gracefully rather than flip to
+zero on a routine gap -- the right already-built tool, not a new
+invented threshold. Corrected result: **623/3,000 (21%) flagged
+"emerging"**, a 62% reduction, with "confirmed" (398→396) essentially
+unchanged as expected (it is already gated by Phase 3's own
+`is_becoming_obsolete`, which has its own recency gate) -- consistent
+with a real fix, not a cosmetic one.
+
+**Two signals reported honestly as over-sensitive at their DEFAULT
+thresholds on this dataset, not silently tuned without a way to validate
+the tuning:**
+- **Persistent bias** (`bias_threshold=0.20`, `min_consecutive=3` on
+  `moving_average`'s own 4-week-horizon backtest rows): flags **2,149 of
+  2,981 articles (72%)**. Investigated the underlying numbers directly
+  (not assumed) -- this is NOT a near-zero-denominator artifact (actual
+  demand in the sampled flagged article ranges 1-46, not near zero); it
+  is that a 20% relative-bias threshold over only ~13-14 quarterly-ish
+  origins is simply very easy to cross by sampling noise alone on demand
+  this volatile (the erratic/lumpy segments Phase 3 already measured as
+  dominant here). Unlike Phase 3's obsolescence flag, there is no facit
+  to calibrate a better threshold against -- reported as "too sensitive
+  to use as-is at these defaults, needs real per-segment tuning before
+  deployment" rather than picking a new number with nothing to validate
+  it against.
+- **Demand shift**: reuses Phase 1's `flag_level_shifts` unchanged,
+  which is already explicitly documented as "NOT CALIBRATED... first-pass
+  heuristic for human review only" in its own docstring. Flags 1,966/3,000
+  (66%) here -- a known, already-documented limitation surfacing again in
+  a new context, not a new problem introduced by this phase.
+- **Coverage breach**: 0 segments flagged at the ±5-percentage-point
+  operational tolerance used here (vs. Phase 5's tighter 87-93% research
+  band) -- `erratic`'s 86.4% raw coverage (just under Phase 5's tighter
+  band) still falls inside this wider, deliberately more lenient
+  operational tolerance, so it does not fire an alert. Consistent with
+  Phase 5's own numbers, not a contradiction -- a monitoring alert and a
+  research acceptance criterion are allowed different tolerances on
+  purpose (an alert firing on every minor statistical wobble would be
+  useless in practice).
+
+**Manual override FVA**: no real override history exists in the demo
+data (nothing has ever overridden a forecast), so this is demonstrated
+with two constructed examples rather than backtested -- one override that
+genuinely improved on the model (FVA +20) and one that made things worse
+(FVA −20), both directions shown deliberately, not just the flattering
+one.
+
+**Not done / explicitly deferred:** `should_retrain()`'s three inputs are
+combined with a plain OR, not a weighted score (stated as a deliberate,
+simple choice in the function's own docstring, not a placeholder);
+override log is an in-memory list of dicts, not wired to a persistent
+table -- forecasting/ has no database layer of its own (see
+forecasting/data.py's docstring), a live override log against wms-app's
+SQLite tenant schema is a separate adapter for whoever builds the
+Streamlit alerts page (Phase 9), not built here.
+
+Full test suite: 167 passing (7 standalone + 160 pytest) — 20 new this
+phase (`tests/test_monitoring.py`). Not committed yet, same standing
+rule as every phase before it.
+
+### Phase 9 (Streamlit pages) — done, verified 2026-09-21
+
+Built `views/forecast_demo.py` (all 6 spec tabs: Overview, Item view,
+Backtest by segment, Policy & frontier, Alerts, Data quality), wired into
+`app.py`'s router and `components/i18n.py`'s sv/en strings, same
+`render(user)` pattern every other page already follows. Deliberately
+shows the SYNTHETIC demo dataset, not the logged-in company's own tenant
+data -- forecasting/ has stayed CSV-first through every phase (see
+forecasting/data.py's own docstring), a live-tenant adapter is Phase 10
+territory, and the page says so explicitly in its own caption rather than
+implying it is showing the company's real numbers.
+
+Heavy intermediate files (Phase 4's backtest results alone are ~155MB)
+are precomputed ONCE by `scripts/prepare_phase9_artifacts.py` into small
+summary files under `data/phase9/` -- the live page never loads the big
+files, only the "Item view" tab computes anything on the fly (one
+article's own forecast, cheap).
+
+**Two real bugs caught by actually clicking through the page in a
+browser, not just checking it imports without error** (this is why "run
+it and look" matters, not just "does the code parse"):
+
+1. **Model name shown didn't match the model actually used.** The Item
+   view's model registry (`MODELS` dict) was missing `seasonal_naive_forecast`
+   -- when a segment's Phase 4 backtest winner was `seasonal_naive`, the
+   page silently substituted `moving_average` while the caption still
+   said "seasonal_naive". Fixed by registering the missing model AND
+   adding explicit fallback-aware captioning (`FALLBACK_MODEL` +
+   `forecast.item_forecast_caption_fallback`) for the one case that
+   genuinely can't run live: `global_gbm` needs a panel-wide retrain per
+   origin (see Phase 4's `run_global_backtest` docstring), so the page
+   now says outright "the backtest winner needs the whole panel, showing
+   X instead" rather than quietly showing a different model under the
+   winner's name.
+2. **The "best model per segment" itself was NON-DETERMINISTIC.** Several
+   baselines tie EXACTLY on this demo data (`naive`/`moving_average`/
+   `seasonal_naive`/`ses` all score 4.520776 on the lumpy segment -- a
+   real, already-documented Phase 4 finding, not a rare edge case).
+   `select_best_model_per_segment()`'s `sort_values()` used pandas'
+   default (non-stable) sort, so which of the four tied models "won" and
+   got displayed depended on incidental row order, not on any real
+   difference in score -- reproduced live: the Backtest tab and the Item
+   view disagreed on lumpy's winner across two page loads of the exact
+   same underlying data. Fixed in `forecasting/models/ensemble.py` with
+   an explicit alphabetical tie-break
+   (`sort_values([loss_col, "model"], kind="stable")`) and a new
+   regression test that checks two different input row orderings resolve
+   to the same winner. This was a real reproducibility bug in code that
+   had been sitting since Phase 4 -- undetected until a UI actually
+   displayed the value to a human across multiple loads.
+
+A third, smaller inconsistency was also caught and fixed the same way:
+the Policy & frontier tab's comparison table computed a plain per-item
+`mean()` fill rate, which silently gives a DIFFERENT number than the
+demand-weighted average CLAUDE.md's own Phase 7 section already reports
+for the same segments -- fixed to demand-weight identically, so the page
+now agrees with itself.
+
+**Not done / explicitly deferred:** no live wiring to a real tenant's own
+SQLite data (explicitly Phase 10, per forecasting/data.py's own scope);
+the manual-override/FVA mechanism from Phase 8 is not exposed in the UI
+(no real override history exists to show yet); alerts are a fixed
+500-item sample, not the full 3,000 (matches Phase 8's own script scope).
+
+No new tests this phase specifically for `views/forecast_demo.py` (a
+Streamlit page under `st.tabs`/`st.altair_chart` is not unit-testable the
+way the rest of forecasting/ is -- verified instead by actually running
+the app and clicking through all 6 tabs plus the sv/en toggle, per this
+session's own "run it in a browser before calling it done" standard);
+`forecasting/models/ensemble.py`'s tie-break fix DOES have a new
+regression test. Full test suite: 168 passing (7 standalone + 161
+pytest). Not committed yet, same standing rule as every phase before it.
 
 ## Deployment (milestone 4 — in progress)
 

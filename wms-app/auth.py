@@ -27,14 +27,20 @@ _COMMON_PASSWORDS = {
 }
 
 
-def password_problem(password: str, email: str = "") -> str | None:
+def password_problem(password: str, email: str = "", lang: str = "sv") -> str | None:
     """Return a user-facing problem description, or None if acceptable."""
     if len(password) < MIN_PASSWORD_LEN:
+        if lang == "sv":
+            return f"Lösenordet måste vara minst {MIN_PASSWORD_LEN} tecken."
         return f"Password must be at least {MIN_PASSWORD_LEN} characters."
     if password.lower() in _COMMON_PASSWORDS:
+        if lang == "sv":
+            return "Det lösenordet finns på varje angripares gissningslista — välj ett annat."
         return "That password is on every attacker's first-guess list — pick another."
     local_part = (email or "").split("@")[0].lower()
     if local_part and len(local_part) >= 4 and local_part in password.lower():
+        if lang == "sv":
+            return "Lösenordet får inte innehålla din e-postadress."
         return "Password must not contain your email address."
     return None
 
@@ -82,18 +88,22 @@ def _unique_slug(conn: sqlite3.Connection, base_slug: str) -> str:
     return slug
 
 
-def register_company(company_name: str, email: str, password: str) -> tuple[User | None, str | None]:
+def register_company(
+    company_name: str, email: str, password: str, lang: str = "sv",
+) -> tuple[User | None, str | None]:
     """Create a company + its first admin user + its tenant database.
 
     Returns (user, error). On error, user is None and nothing was written.
     """
-    problem = password_problem(password, email)
+    problem = password_problem(password, email, lang)
     if problem:
         return None, problem
 
     conn = db.get_directory_conn()
     try:
         if conn.execute("SELECT 1 FROM users WHERE email = ?", (email,)).fetchone():
+            if lang == "sv":
+                return None, "Det finns redan ett konto med den här e-postadressen."
             return None, "An account with this email already exists."
 
         slug = _unique_slug(conn, db.slugify(company_name))
@@ -128,7 +138,7 @@ def register_company(company_name: str, email: str, password: str) -> tuple[User
 
 # ── Login ─────────────────────────────────────────────────────────────────
 
-def login(email: str, password: str) -> tuple[User | None, str | None]:
+def login(email: str, password: str, lang: str = "sv") -> tuple[User | None, str | None]:
     conn = db.get_directory_conn()
     try:
         row = conn.execute(
@@ -144,7 +154,7 @@ def login(email: str, password: str) -> tuple[User | None, str | None]:
         conn.close()
 
     if not row or not verify_password(password, row["password_salt"], row["password_hash"]):
-        return None, "Fel e-post eller lösenord."
+        return None, ("Fel e-post eller lösenord." if lang == "sv" else "Incorrect email or password.")
 
     return User(
         id=row["id"], email=row["email"], role=row["role"],

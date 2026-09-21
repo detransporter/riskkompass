@@ -60,6 +60,27 @@ def test_select_best_model_per_segment_empty_scores():
     assert select_best_model_per_segment(pd.DataFrame()) == {}
 
 
+def test_select_best_model_per_segment_breaks_ties_alphabetically_and_deterministically():
+    """Reproduces the real tie this codebase's own demo data hits (see
+    ensemble.py's docstring): four models scoring EXACTLY the same on a
+    segment. Must always resolve to the same (alphabetically first)
+    winner, regardless of the row order scores happens to arrive in --
+    tested with two different input row orderings to prove the result
+    doesn't depend on incoming order (an unstable sort would have let it)."""
+    tied = pd.DataFrame([
+        {"segment": "lumpy", "model": "ses", "pinball_q90": 4.52, "n_observations": 100},
+        {"segment": "lumpy", "model": "naive", "pinball_q90": 4.52, "n_observations": 100},
+        {"segment": "lumpy", "model": "moving_average", "pinball_q90": 4.52, "n_observations": 100},
+        {"segment": "lumpy", "model": "seasonal_naive", "pinball_q90": 4.52, "n_observations": 100},
+        {"segment": "lumpy", "model": "croston", "pinball_q90": 5.31, "n_observations": 100},
+    ])
+    reordered = tied.iloc[::-1].reset_index(drop=True)
+
+    result_a = select_best_model_per_segment(tied, quantile=0.9)
+    result_b = select_best_model_per_segment(reordered, quantile=0.9)
+    assert result_a == result_b == {"lumpy": "moving_average"}
+
+
 def test_forecast_with_selection_uses_selected_model():
     calls = []
 

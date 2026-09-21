@@ -178,6 +178,11 @@ def main() -> None:
     print(f"  policy B (own):  fill_rate={overall['fill_rate_b']:.1%}  "
           f"stock_value={overall['stock_value_b']:,.0f} SEK".replace(",", " "))
 
+    frontier_df = pd.DataFrame(frontier_rows)
+    frontier_df.loc[len(frontier_df)] = ["policy_a", overall["fill_rate_a"], overall["stock_value_a"]]
+    frontier_df.loc[len(frontier_df)] = ["policy_b", overall["fill_rate_b"], overall["stock_value_b"]]
+    frontier_df.to_csv("data/phase7_frontier.csv", index=False)
+
 
 if __name__ == "__main__":
     main()
