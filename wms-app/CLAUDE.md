@@ -1290,7 +1290,67 @@ another.
 
 Full test suite: 182 passing (7 standalone + 175 pytest) — 6 new
 (`tests/test_data_wms.py`, using a real throwaway tenant DB, same pattern
-`test_db.py` already established, not a mocked path). Not committed yet.
+`test_db.py` already established, not a mocked path). Committed
+(`4ec4dc2`, pushed).
+
+### Live-page UX simplification — done, verified 2026-09-21
+
+User feedback after actually testing `views/forecast_live.py` against
+Testbolaget AB in a browser: "det är svårt att förstå prognosen för en
+användare, det måste bli lättare eller enklare" -- confirmed the
+"användare" in question is a CLIENT'S OWN staff (e.g. an inköpschef),
+not David himself. The page as built for Phase 9 was written for
+someone validating the forecasting engine (pinball loss, ADI/CV² class,
+model names, raw quantile-labeled charts) -- exactly wrong for the
+actual target audience CLAUDE.md's own "Målgrupp" section names
+(non-technical SME purchasing/operations staff).
+
+Added a new, FIRST/default tab, "Beställningsförslag" (Order
+recommendations): one row per article -- current stock, reorder point,
+suggested order quantity, and a traffic-light status (🔴 Beställ nu /
+🟡 Beställ snart / 🟢 OK, sorted most-urgent-first) -- zero model names,
+zero statistical terms anywhere in this table. A "Varför?" picker below
+it surfaces `forecasting/explain.py`'s existing plain-Swedish paragraph
+per article (that function was already fine; nothing needed to change
+there, this was a presentation problem, not a content problem).
+
+Simplified the existing "Artikelvy" tab rather than replacing it:
+- Forecast-fan chart: y-axis was auto-labeled "q5, q95, q10, q90, q50" by
+  Altair (the literal field names) -- now explicitly titled "Antal".
+  Header changed from "Prognosfläkt (kvantiler)" to "Vad kan hända
+  framöver?", with a one-line plain-language caption replacing the
+  headline model-name caption. The model name itself moved into a
+  collapsed "Teknisk detalj" expander -- still available, not deleted,
+  just not the first thing a non-technical reader sees.
+- "Policy (Fas 6)" header (literal internal phase-numbering jargon) ->
+  "Rekommendation för denna artikel".
+- Alerts tab: `type`/`severity` columns were raw English identifiers
+  (`persistent_bias`, `warning`) from `forecasting/monitoring.py`'s own
+  internal alert-dict keys -- translated to plain Swedish/English at the
+  UI boundary (`ALERT_TYPE_LABELS`/`ALERT_SEVERITY_LABELS` in
+  `views/forecast_live.py`), same principle `components/sv.py` already
+  applies for the vendored `analysis/` modules' English status values.
+
+The four remaining tabs (Backtest per segment, Policy & frontier, Larm,
+Datakvalitet) are left as-is, deliberately -- they are genuinely for
+validating/monitoring the engine, a real (if secondary) audience this
+session already confirmed exists. Each now carries an explicit caption
+("Den här fliken är till för uppföljning/validering... inte för dagliga
+beställningsbeslut") so a non-technical user who wanders in knows they've
+left the simple view, rather than being confused by pinball-loss numbers
+with no explanation.
+
+Not backported to `views/forecast_demo.py` -- that page's own caption
+already states its audience is David himself exploring the synthetic
+demo estate, not a client's staff; the same simplification would be
+worth doing if that page's audience ever changes, not assumed needed now.
+
+No new automated tests this round (a UI copy/layout change, not new
+logic -- `forecasting/explain.py` and `forecasting/policy.py`, which
+`_compute_order_recommendations()` calls unchanged, already have their
+own test coverage from Phase 6). Verified by running the app and
+clicking through both the order-recommendations table and the simplified
+item view against Testbolaget AB's real data. Not committed yet.
 
 ## Deployment (milestone 4 — in progress)
 

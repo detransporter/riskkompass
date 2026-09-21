@@ -499,7 +499,7 @@ STRINGS: dict[str, dict[str, str]] = {
         "en": "The backtest winner for this segment is **{winner}**, but it needs training across the "
               "whole item panel and cannot run live for a single item here -- showing **{model}** instead.",
     },
-    "forecast.item_policy_header": {"sv": "Policy (Fas 6)", "en": "Policy (Phase 6)"},
+    "forecast.item_policy_header": {"sv": "Rekommendation för denna artikel", "en": "Recommendation for this item"},
     "forecast.item_not_enough_history": {
         "sv": "För lite historik för att visa en prognos för denna artikel.",
         "en": "Not enough history to show a forecast for this item.",
@@ -575,6 +575,43 @@ STRINGS: dict[str, dict[str, str]] = {
         "sv": "Inga utleveranser registrerade ännu -- inget att prognostisera på.",
         "en": "No outbound deliveries recorded yet -- nothing to forecast from.",
     },
+
+    # ── Simple, non-technical "what do I order" view (added after user feedback:
+    #    the original page was too technical for a client's own staff) ──────
+    "forecast.tab_orders": {"sv": "Beställningsförslag", "en": "Order recommendations"},
+    "forecast.orders_header": {"sv": "Vad behöver beställas?", "en": "What needs to be ordered?"},
+    "forecast.orders_caption": {
+        "sv": "Baserat på nuvarande lager och beräknad beställningspunkt per artikel.",
+        "en": "Based on current stock and each item's calculated reorder point.",
+    },
+    "forecast.orders_spinner": {"sv": "Räknar ut beställningsförslag...", "en": "Calculating order recommendations..."},
+    "forecast.orders_status_now": {"sv": "Beställ nu", "en": "Order now"},
+    "forecast.orders_status_soon": {"sv": "Beställ snart", "en": "Order soon"},
+    "forecast.orders_status_ok": {"sv": "OK", "en": "OK"},
+    "forecast.orders_col_article": {"sv": "Artikel", "en": "Item"},
+    "forecast.orders_col_description": {"sv": "Beskrivning", "en": "Description"},
+    "forecast.orders_col_stock": {"sv": "Nuvarande lager", "en": "Current stock"},
+    "forecast.orders_col_reorder_point": {"sv": "Beställningspunkt", "en": "Reorder point"},
+    "forecast.orders_col_order_qty": {"sv": "Föreslagen orderkvantitet", "en": "Suggested order quantity"},
+    "forecast.orders_explain_header": {"sv": "Varför? Välj en artikel", "en": "Why? Pick an item"},
+
+    "forecast.item_forecast_header_simple": {"sv": "Vad kan hända framöver?", "en": "What might happen next?"},
+    "forecast.item_forecast_plain_caption": {
+        "sv": "Det skuggade fältet visar ett sannolikt intervall -- mörkare i mitten (vanligast), "
+              "ljusare mot kanten (mindre sannolikt men möjligt).",
+        "en": "The shaded area shows a likely range -- darker in the middle (most likely), lighter "
+              "toward the edge (less likely but possible).",
+    },
+    "forecast.item_forecast_y_axis": {"sv": "Antal", "en": "Quantity"},
+    "forecast.technical_detail_label": {"sv": "Teknisk detalj", "en": "Technical detail"},
+    "forecast.technical_tab_caption": {
+        "sv": "Den här fliken är till för uppföljning/validering av prognosmotorn, inte för dagliga beställningsbeslut -- se \"Beställningsförslag\" för det.",
+        "en": "This tab is for validating/monitoring the forecasting engine, not for day-to-day ordering decisions -- see \"Order recommendations\" for that.",
+    },
+
+    "forecast.alerts_col_severity": {"sv": "Allvarlighetsgrad", "en": "Severity"},
+    "forecast.alerts_col_type": {"sv": "Typ", "en": "Type"},
+    "forecast.alerts_col_message": {"sv": "Meddelande", "en": "Message"},
 }
 
 

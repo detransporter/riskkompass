@@ -56,6 +56,32 @@ MODELS = {
     "ets": ets_forecast, "theta": theta_forecast,
 }
 
+# forecasting/monitoring.py's own type/severity strings are internal
+# identifiers (matching its alert dicts' "type"/"severity" keys), not
+# meant for display -- translated here, at the UI boundary, same
+# principle components/sv.py already applies for the vendored analysis/
+# modules' English status values.
+ALERT_SEVERITY_LABELS = {
+    "sv": {"critical": "Kritiskt", "warning": "Varning", "info": "Info"},
+    "en": {"critical": "Critical", "warning": "Warning", "info": "Info"},
+}
+ALERT_TYPE_LABELS = {
+    "sv": {
+        "persistent_bias": "Prognosen träffar fel",
+        "coverage_breach": "Osäkerheten stämmer inte",
+        "demand_shift": "Efterfrågan har förändrats",
+        "obsolescence_risk": "Risk för föråldrad artikel",
+        "obsolescence_recovering": "Återhämtning upptäckt",
+    },
+    "en": {
+        "persistent_bias": "Forecast is consistently off",
+        "coverage_breach": "Uncertainty range is off",
+        "demand_shift": "Demand has shifted",
+        "obsolescence_risk": "Risk of obsolete item",
+        "obsolescence_recovering": "Recovery detected",
+    },
+}
+
 
 @st.cache_data(show_spinner=False)
 def _load_tenant_data(company_slug: str) -> dict:
@@ -64,6 +90,106 @@ def _load_tenant_data(company_slug: str) -> dict:
     series = build_demand_series(data["outbound"], data["items"], freq="W")
     lt_table = build_supplier_lead_time_table(data["inbound"])
     return {**data, "segment_table": segment_table, "series": series, "lt_table": lt_table}
+
+
+@st.cache_data(show_spinner=False)
+def _compute_order_recommendations(company_slug: str) -> pd.DataFrame:
+    """One row per article: current stock, reorder point, recommended
+    order quantity, and a traffic-light status -- the plain "what do I
+    need to order" answer, no model names or statistical terms anywhere
+    in this table. compute_policy() itself is unchanged (Phase 6); this
+    just runs it for every article and packages the result for a
+    non-technical reader. Fast enough (a few seconds for a few hundred
+    items) to not need the ~1-minute backtest this page's other tabs
+    depend on -- a purchasing manager should not have to wait for a
+    statistical validation run just to see what to order today.
+    """
+    data = _load_tenant_data(company_slug)
+    items, segment_table = data["items"], data["segment_table"]
+    stock_by_article = data["stock"].set_index("article_id")["stock_qty"]
+    series_by_article = {aid: g.sort_values("period")["qty_ordered"] for aid, g in data["series"].groupby("article_id")}
+
+    rows = []
+    for _, item in items.iterrows():
+        article_id = item["article_id"]
+        history = series_by_article.get(article_id)
+        if history is None or len(history) < 8:
+            continue
+        seg_row = segment_table[segment_table["article_id"] == article_id]
+        abc_class = seg_row.iloc[0]["abc_class"] if not seg_row.empty else None
+        lead_samples = supplier_lead_time_samples(data["lt_table"], item["supplier_id"])
+        policy = compute_policy(
+            history, lead_samples, unit_cost=item["unit_cost_sek"], abc_class=abc_class,
+            moq=item["moq"], order_multiple=item["order_multiple"], n_simulations=200,
+        )
+        current_stock = float(stock_by_article.get(article_id, 0.0))
+        reorder_point = policy["reorder_point"]
+        if current_stock <= reorder_point:
+            status = "now"
+        elif current_stock <= reorder_point * 1.3:
+            status = "soon"
+        else:
+            status = "ok"
+        rows.append({
+            "article_id": article_id, "description": item["description"], "status": status,
+            "current_stock": current_stock, "reorder_point": reorder_point,
+            "order_quantity": policy["order_quantity"],
+        })
+    df = pd.DataFrame(rows)
+    if df.empty:
+        return df
+    status_order = {"now": 0, "soon": 1, "ok": 2}
+    df["_sort"] = df["status"].map(status_order)
+    return df.sort_values("_sort").drop(columns="_sort").reset_index(drop=True)
+
+
+def _render_order_recommendations(data: dict, company_slug: str) -> None:
+    st.subheader(t("forecast.orders_header"))
+    st.caption(t("forecast.orders_caption"))
+
+    with st.spinner(t("forecast.orders_spinner")):
+        recs = _compute_order_recommendations(company_slug)
+    if recs.empty:
+        st.info(t("forecast.item_not_enough_history"))
+        return
+
+    status_label = {"now": t("forecast.orders_status_now"), "soon": t("forecast.orders_status_soon"),
+                    "ok": t("forecast.orders_status_ok")}
+    status_icon = {"now": "\U0001F534", "soon": "\U0001F7E1", "ok": "\U0001F7E2"}
+    display = recs.copy()
+    display["Status"] = display["status"].map(lambda s: f"{status_icon[s]} {status_label[s]}")
+    display = display.rename(columns={
+        "article_id": t("forecast.orders_col_article"), "description": t("forecast.orders_col_description"),
+        "current_stock": t("forecast.orders_col_stock"), "reorder_point": t("forecast.orders_col_reorder_point"),
+        "order_quantity": t("forecast.orders_col_order_qty"),
+    })
+    display = display[[t("forecast.orders_col_article"), t("forecast.orders_col_description"), "Status",
+                       t("forecast.orders_col_stock"), t("forecast.orders_col_reorder_point"),
+                       t("forecast.orders_col_order_qty")]]
+
+    n_now = (recs["status"] == "now").sum()
+    n_soon = (recs["status"] == "soon").sum()
+    col1, col2, col3 = st.columns(3)
+    col1.metric(status_label["now"], n_now)
+    col2.metric(status_label["soon"], n_soon)
+    col3.metric(status_label["ok"], (recs["status"] == "ok").sum())
+
+    st.dataframe(display.round(0), width="stretch", hide_index=True)
+
+    st.divider()
+    st.subheader(t("forecast.orders_explain_header"))
+    items = data["items"]
+    label_by_id = (items["article_id"] + " -- " + items["description"].fillna("")).to_dict()
+    selected = st.selectbox(t("forecast.item_select_label"), list(recs["article_id"]),
+                            format_func=lambda aid: label_by_id.get(aid, aid), key="orders_explain_select")
+    item = items[items["article_id"] == selected].iloc[0]
+    seg_row = data["segment_table"][data["segment_table"]["article_id"] == selected].iloc[0]
+    series_by_article = {aid: g.sort_values("period")["qty_ordered"] for aid, g in data["series"].groupby("article_id")}
+    history = series_by_article.get(selected)
+    lead_samples = supplier_lead_time_samples(data["lt_table"], item["supplier_id"])
+    policy = compute_policy(history, lead_samples, unit_cost=item["unit_cost_sek"], abc_class=seg_row["abc_class"],
+                            moq=item["moq"], order_multiple=item["order_multiple"], n_simulations=200)
+    st.info(explain_policy(selected, item["description"], policy, seg_row["sbc_class"], history, lead_samples))
 
 
 @st.cache_data(show_spinner=False)
@@ -141,19 +267,25 @@ def _render_item_view(data: dict, company_slug: str) -> None:
         model_name = "moving_average"
     model_fn = MODELS[model_name]
 
-    st.subheader(t("forecast.item_forecast_header"))
-    st.caption(t("forecast.item_forecast_caption", model=model_name))
+    st.subheader(t("forecast.item_forecast_header_simple"))
+    st.caption(t("forecast.item_forecast_plain_caption"))
     train = history["qty_ordered"]
     fan = _forecast_fan(train, model_fn)
     last_period = history["period"].max()
     fan["period"] = fan["horizon"].apply(lambda h: last_period + pd.Timedelta(weeks=h))
 
-    band = alt.Chart(fan).mark_area(opacity=0.25, color="#2F6FED").encode(x="period:T", y="q5:Q", y2="q95:Q")
-    band2 = alt.Chart(fan).mark_area(opacity=0.35, color="#2F6FED").encode(x="period:T", y="q10:Q", y2="q90:Q")
+    y_title = t("forecast.item_forecast_y_axis")
+    band = alt.Chart(fan).mark_area(opacity=0.25, color="#2F6FED").encode(
+        x=alt.X("period:T", title=None), y=alt.Y("q5:Q", title=y_title), y2="q95:Q")
+    band2 = alt.Chart(fan).mark_area(opacity=0.35, color="#2F6FED").encode(
+        x=alt.X("period:T", title=None), y=alt.Y("q10:Q", title=y_title), y2="q90:Q")
     median = alt.Chart(fan).mark_line(color="#0E1526", strokeWidth=2).encode(
-        x="period:T", y="q50:Q", tooltip=["period:T", "q50:Q", "q5:Q", "q95:Q"],
+        x=alt.X("period:T", title=None), y=alt.Y("q50:Q", title=y_title),
+        tooltip=["period:T", "q50:Q", "q5:Q", "q95:Q"],
     )
     st.altair_chart((band + band2 + median).properties(height=280), width="stretch")
+    with st.expander(t("forecast.technical_detail_label")):
+        st.caption(t("forecast.item_forecast_caption", model=model_name))
 
     st.subheader(t("forecast.item_policy_header"))
     lead_samples = supplier_lead_time_samples(data["lt_table"], item["supplier_id"])
@@ -257,10 +389,22 @@ def _render_alerts_tab(data: dict, company_slug: str) -> None:
     if alerts.empty:
         st.info(t("forecast.alerts_none"))
         return
-    severities = sorted(alerts["severity"].unique())
+
+    lang = get_lang()
+    severity_labels = ALERT_SEVERITY_LABELS[lang]
+    type_labels = ALERT_TYPE_LABELS[lang]
+    alerts["severity_label"] = alerts["severity"].map(severity_labels).fillna(alerts["severity"])
+    alerts["type_label"] = alerts["type"].map(type_labels).fillna(alerts["type"])
+
+    severities = sorted(alerts["severity_label"].unique())
     chosen = st.multiselect(t("forecast.alerts_severity_filter"), severities, default=severities)
-    filtered = alerts[alerts["severity"].isin(chosen)]
-    st.dataframe(filtered if not filtered.empty else alerts.head(0), width="stretch", hide_index=True)
+    filtered = alerts[alerts["severity_label"].isin(chosen)]
+    display = (filtered if not filtered.empty else alerts.head(0))[["severity_label", "type_label", "message"]]
+    display = display.rename(columns={
+        "severity_label": t("forecast.alerts_col_severity"), "type_label": t("forecast.alerts_col_type"),
+        "message": t("forecast.alerts_col_message"),
+    })
+    st.dataframe(display, width="stretch", hide_index=True)
 
 
 def _render_quality_tab(data: dict) -> None:
@@ -295,18 +439,23 @@ def render(user: auth.User) -> None:
         return
 
     tabs = st.tabs([
-        t("forecast.tab_overview"), t("forecast.tab_item"), t("forecast.tab_backtest"),
-        t("forecast.tab_policy"), t("forecast.tab_alerts"), t("forecast.tab_quality"),
+        t("forecast.tab_orders"), t("forecast.tab_overview"), t("forecast.tab_item"),
+        t("forecast.tab_backtest"), t("forecast.tab_policy"), t("forecast.tab_alerts"),
+        t("forecast.tab_quality"),
     ])
     with tabs[0]:
-        _render_overview(data)
+        _render_order_recommendations(data, user.company_slug)
     with tabs[1]:
-        _render_item_view(data, user.company_slug)
+        _render_overview(data)
     with tabs[2]:
-        _render_backtest_tab(data, user.company_slug)
+        _render_item_view(data, user.company_slug)
     with tabs[3]:
-        _render_policy_tab(data)
+        st.caption(t("forecast.technical_tab_caption"))
+        _render_backtest_tab(data, user.company_slug)
     with tabs[4]:
-        _render_alerts_tab(data, user.company_slug)
+        st.caption(t("forecast.technical_tab_caption"))
+        _render_policy_tab(data)
     with tabs[5]:
+        _render_alerts_tab(data, user.company_slug)
+    with tabs[6]:
         _render_quality_tab(data)
