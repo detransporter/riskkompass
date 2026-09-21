@@ -14,7 +14,7 @@ from forecasting.models.baselines import (
     ses_forecast,
 )
 from forecasting.models.intermittent import bootstrap_forecast, croston_forecast, sba_forecast, tsb_forecast
-from forecasting.models.statistical import ets_forecast, theta_forecast
+from forecasting.models.statistical import _clip_to_sane_bound, ets_forecast, theta_forecast
 
 
 def test_naive_forecast_is_last_value():
@@ -164,6 +164,53 @@ def test_ets_and_theta_never_crash_on_all_zero_series():
     theta_result = theta_forecast(train, horizon=3)
     assert ets_result["point"] == 0.0
     assert theta_result["point"] == 0.0
+
+
+# ── quantile sanity bound (docs/FORECAST_SPEC.md Phase 10 finding) ─────
+
+def test_clip_to_sane_bound_caps_an_exploded_quantile():
+    """Reproduces, as a pure-function unit test, the exact failure mode
+    found running AutoETS against real M3 data: q90 reaching 1.7e10
+    against a training series that never exceeded ~13,000 -- AutoETS's
+    own internal variance estimate blowing up, not an arithmetic bug in
+    this wrapper, but not a usable number for any downstream consumer
+    either (see statistical.py's SANITY_BOUND_MULTIPLIER docstring)."""
+    train = pd.Series([2000.0, 3000.0, 13000.0, 5000.0, 2500.0])
+    point = 2454.0
+    quantiles = {0.05: 100.0, 0.1: 500.0, 0.5: 2454.0, 0.8: 9000.0, 0.9: 1.7e10, 0.95: 3.3e10}
+    clipped_point, clipped_q = _clip_to_sane_bound(point, quantiles, train)
+    bound = 13000.0 * 20  # SANITY_BOUND_MULTIPLIER
+    assert clipped_point == point  # untouched, already sane
+    assert clipped_q[0.9] == bound
+    assert clipped_q[0.95] == bound
+    assert clipped_q[0.05] == 100.0  # untouched, already sane
+    assert clipped_q[0.5] == 2454.0
+
+
+def test_clip_to_sane_bound_no_op_on_reasonable_quantiles():
+    train = pd.Series([10.0, 20.0, 15.0])
+    quantiles = {0.5: 15.0, 0.9: 25.0}
+    point, clipped_q = _clip_to_sane_bound(15.0, quantiles, train)
+    assert point == 15.0
+    assert clipped_q == quantiles
+
+
+def test_clip_to_sane_bound_empty_train_is_no_op():
+    quantiles = {0.5: 1e12}
+    point, clipped_q = _clip_to_sane_bound(1e12, quantiles, pd.Series([], dtype=float))
+    assert point == 1e12
+    assert clipped_q == quantiles
+
+
+def test_clip_to_sane_bound_all_zero_train_is_no_op():
+    """A training max of 0 gives a bound of 0 -- clipping everything to 0
+    would be worse than not clipping at all, so this is a no-op, matching
+    ets_forecast's own separate all-zero-series floor elsewhere."""
+    train = pd.Series([0.0, 0.0, 0.0])
+    quantiles = {0.5: 5.0}
+    point, clipped_q = _clip_to_sane_bound(5.0, quantiles, train)
+    assert point == 5.0
+    assert clipped_q == quantiles
 
 
 # ── Bootstrap ─────────────────────────────────────────────────────────

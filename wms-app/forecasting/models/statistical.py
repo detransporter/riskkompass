@@ -32,11 +32,36 @@ from statsforecast.models import AutoETS, Theta
 DEFAULT_QUANTILES = (0.05, 0.1, 0.5, 0.8, 0.9, 0.95)
 MIN_PERIODS = 7  # same floor analysis/demand_forecast.py verified empirically for AutoETS
 
+# AutoETS's own internal variance estimate can blow up on some real series
+# (found on M3 data, docs/FORECAST_SPEC.md Phase 10: one series' q90 reached
+# 1.7e10 against a point forecast near 2,450 and a training maximum around
+# 13,000 -- a genuine property of that fitted ETS model, not an arithmetic
+# bug here, but not a usable number for any downstream consumer either, e.g.
+# forecasting/policy.py's reorder point would inherit the same absurdity).
+# SANITY_BOUND_MULTIPLIER caps every quantile at this many times the
+# largest value ever observed in training -- generous headroom for real
+# growth (20x the historical peak), while still ruling out a
+# multi-order-of-magnitude blowup.
+SANITY_BOUND_MULTIPLIER = 20
+
 
 def _quantiles_from_levels(point: float, lo80: float, hi80: float, lo90: float, hi90: float,
                            hi60: float, quantiles) -> dict:
     lookup = {0.5: point, 0.1: lo80, 0.9: hi80, 0.05: lo90, 0.95: hi90, 0.8: hi60}
     return {q: max(lookup.get(q, point), 0.0) for q in quantiles}
+
+
+def _clip_to_sane_bound(point: float, quantiles: dict, train: pd.Series) -> tuple[float, dict]:
+    """See SANITY_BOUND_MULTIPLIER's own comment for why this exists.
+    A no-op (returns point/quantiles unchanged) whenever training has no
+    positive history to bound against -- nothing sane to compare a
+    forecast to for a series that never showed a positive value."""
+    if len(train) == 0:
+        return point, quantiles
+    bound = float(train.max()) * SANITY_BOUND_MULTIPLIER
+    if bound <= 0:
+        return point, quantiles
+    return min(point, bound), {q: min(v, bound) for q, v in quantiles.items()}
 
 
 def _fit_and_forecast(model, train: pd.Series, horizon: int, quantiles) -> dict:
@@ -69,6 +94,7 @@ def _fit_and_forecast(model, train: pd.Series, horizon: int, quantiles) -> dict:
         hi60=float(row[f"{name}-hi-60"]),
         quantiles=quantiles,
     )
+    point, q = _clip_to_sane_bound(point, q, train)
     return {"point": point, "quantiles": q}
 
 

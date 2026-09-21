@@ -1163,7 +1163,78 @@ the app and clicking through all 6 tabs plus the sv/en toggle, per this
 session's own "run it in a browser before calling it done" standard);
 `forecasting/models/ensemble.py`'s tie-break fix DOES have a new
 regression test. Full test suite: 168 passing (7 standalone + 161
-pytest). Not committed yet, same standing rule as every phase before it.
+pytest). Committed (`06455a9`, pushed).
+
+### Phase 10 (validation on real data) — done, verified 2026-09-21
+
+Chose the M3 competition dataset (Makridakis & Hibon 2000) over M5
+(several GB, far heavier) and over `carparts` (the spec's own suggested
+intermittent-demand alternative -- not available without either
+installing an unvetted third-party package or guessing at a URL, and the
+user picked M3 explicitly when asked). Downloaded directly via `curl`
+from Zenodo (`data/m3/m3_monthly_dataset.zip`, ~330KB, a specific real
+URL read out of the `datasetsforecast` PyPI package's own source rather
+than invented) after `pip install datasetsforecast` was itself blocked by
+the session's auto-mode classifier as an unvetted-package supply-chain
+risk -- avoided entirely by writing a ~50-line self-contained `.tsf`
+parser (`forecasting/datasets/m3.py`) instead of taking the dependency.
+
+**Scope stated honestly up front, not discovered as a surprise
+afterward:** M3 is a bare (series, date, value) benchmark with no items/
+inbound/lead-time/stock data at all. Only Phases 2-4 (forecasting
+accuracy + SBC segmentation) can be validated against it --
+`scripts/run_phase10_m3_validation.py` says so in its own docstring and
+its own printed output. Phases 5-7 need real PO/lead-time data this
+dataset does not have; genuinely out of scope, not a gap in the script.
+`global_gbm` also skipped -- its value is pooling across item attributes
+(category, cost, lead time) M3 doesn't provide either.
+
+**This is the result that finally tests Phase 4's own "working theory"
+directly, not just repeats it:** Phase 4's report speculated that the
+synthetic demo data might be too close to stationary noise for advanced
+models to show any real edge over `moving_average`, and proposed testing
+that on real data as "the first thing to check before concluding these
+methods don't work." M3 is exactly that test, and the result is a clean,
+strong confirmation:
+
+| Segment | Best model | FVA vs best baseline | (Phase 4's synthetic-data FVA, for comparison) |
+|---|---|---|---|
+| erratic (n=35 series) | theta | **+19.5%** | +1.5% |
+| smooth (n=1,392 series) | theta | **+42.2%** | (not a real segment on the synthetic set) |
+
+Theta wins BOTH real segments decisively -- not a coincidence: Theta
+(Assimakopoulos & Nikolopoulos 2000) was one of the strongest performers
+in the ORIGINAL M3 competition itself, so a Theta win on M3 specifically
+is closer to an expected textbook result than a lucky roll, a genuine
+sanity check this codebase's pipeline passes. The near-total absence of
+intermittent/lumpy series (1,392 smooth + 35 erratic out of 1,427, vs.
+the demo set's lumpy/intermittent-dominated mix) reflects M3's own real
+domain mix (demographic/micro/macro/industry/finance series, mostly
+regular monthly values) rather than anything about the pipeline.
+
+**A real bug found and fixed BECAUSE this was real data, not synthetic
+data with bounded, generator-controlled variance:** the first run showed
+`ets`'s pinball loss at 1,559,473 in the erratic segment -- roughly 1,000x
+every other model. Investigated directly (not assumed): a specific
+series' AutoETS-derived q90 quantile reached 1.7e10 against a training
+series that never exceeded ~13,000 and a point forecast near 2,450 --
+AutoETS's own internal variance estimate genuinely blowing up on that
+series, not an arithmetic bug in `forecasting/models/statistical.py`'s
+wrapper, but not a usable number for anything downstream either (a
+`policy.py` reorder point inheriting a 17-billion-unit quantile would be
+absurd). Fixed with `SANITY_BOUND_MULTIPLIER` (caps every quantile at
+20x the largest value ever observed in training) and a regression test
+reproducing the exact numbers found. Corrected result: `ets`'s
+erratic-segment pinball loss dropped to 1,861.87 -- back in the same
+ballpark as every other model, Theta's own numbers unaffected (the bug
+was ETS-specific). This is exactly the kind of finding synthetic data,
+bounded by its own generator's own parameters, was never going to
+surface -- real data's job in this phase, working as intended.
+
+Full test suite: 176 passing (7 standalone + 169 pytest) — 8 new this
+phase (4 in `tests/test_m3_loader.py`, 4 new `_clip_to_sane_bound` tests
+in `tests/test_models.py`). Not committed yet, same standing rule as
+every phase before it.
 
 ## Deployment (milestone 4 — in progress)
 
