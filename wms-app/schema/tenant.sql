@@ -55,7 +55,16 @@ CREATE TABLE IF NOT EXISTS transactions (
     to_location     TEXT,
     reference       TEXT,                       -- order_no / PO number
     user_email      TEXT,
-    created_at      TEXT NOT NULL                -- ISO-8601
+    created_at      TEXT NOT NULL,               -- ISO-8601
+    -- Nullable, only meaningful for txn_type='receive'. Added 2026-09-21
+    -- for docs/FORECAST_SPEC.md Phase 5: real lead time is receipt date
+    -- minus order date, and created_at only ever records the receipt.
+    -- Existing tenant databases get these via db._migrate_tenant_db()
+    -- (idempotent ALTER, runs on every get_tenant_conn()) since this
+    -- CREATE TABLE only applies to brand-new tenants -- keep the two in
+    -- sync if either changes.
+    po_date         TEXT,                       -- when the goods were ordered
+    expected_date   TEXT                         -- promised/expected receipt date
 );
 
 CREATE INDEX IF NOT EXISTS ix_txn_sku      ON transactions (sku);

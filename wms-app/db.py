@@ -68,7 +68,36 @@ def get_tenant_conn(company_slug: str) -> sqlite3.Connection:
     conn.row_factory = sqlite3.Row
     conn.execute("PRAGMA journal_mode = WAL")
     conn.execute("PRAGMA foreign_keys = ON")
+    _migrate_tenant_db(conn)
     return conn
+
+
+def _migrate_tenant_db(conn: sqlite3.Connection) -> None:
+    """Idempotent schema migrations for tenant databases created before a
+    schema change -- adds columns schema/tenant.sql now defines for brand-new
+    tenants, without touching any existing data. Cheap and safe to call on
+    every connection open (a no-op once the column exists); the alternative
+    (a separate migration-runner step) would be one more thing to remember
+    to run, and this app has no deploy pipeline yet to hook that into.
+
+    Guards on the table existing first: during init_tenant_db() this runs
+    via get_tenant_conn() *before* schema/tenant.sql's CREATE TABLE has
+    executed, on a connection to a file that may not have any tables yet.
+    """
+    table_exists = conn.execute(
+        "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'transactions'"
+    ).fetchone()
+    if not table_exists:
+        return
+
+    # 2026-09-21, docs/FORECAST_SPEC.md Phase 5: real lead time is receipt
+    # date minus order date; created_at only ever records the receipt.
+    existing_cols = {row["name"] for row in conn.execute("PRAGMA table_info(transactions)")}
+    if "po_date" not in existing_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN po_date TEXT")
+    if "expected_date" not in existing_cols:
+        conn.execute("ALTER TABLE transactions ADD COLUMN expected_date TEXT")
+    conn.commit()
 
 
 # --------------------------------------------------------------------- #
@@ -152,6 +181,8 @@ def record_transaction(
     to_location: str | None = None,
     reference: str | None = None,
     user_email: str | None = None,
+    po_date: str | None = None,
+    expected_date: str | None = None,
 ) -> int:
     """Insert a transactions row and apply the matching stock delta.
 
@@ -163,6 +194,11 @@ def record_transaction(
     pack / ship / count are logged for the audit trail and the IHA pipeline
     but do not move physical stock themselves in this MVP -- pick already
     removed the goods from the shelf.
+
+    po_date/expected_date are only meaningful for txn_type='receive' (see
+    schema/tenant.sql) -- callers for every other txn_type simply never
+    pass them, no validation needed here since a NULL is exactly correct
+    for "not applicable", not "not yet known".
     """
     if txn_type == "receive":
         if not to_location:
@@ -190,9 +226,11 @@ def record_transaction(
     cur = conn.execute(
         """
         INSERT INTO transactions
-            (txn_type, sku, qty, from_location, to_location, reference, user_email, created_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            (txn_type, sku, qty, from_location, to_location, reference, user_email,
+             created_at, po_date, expected_date)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         """,
-        (txn_type, sku, qty, from_location, to_location, reference, user_email, now_iso()),
+        (txn_type, sku, qty, from_location, to_location, reference, user_email,
+         now_iso(), po_date, expected_date),
     )
     return cur.lastrowid
