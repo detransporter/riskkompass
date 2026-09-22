@@ -1379,9 +1379,52 @@ to one line ("Baserat på {company}s egna lagerdata.") -- a client's own
 staff has no reason to be pointed at this repository's internal
 documentation.
 
-Same "leave the four analytical tabs alone" decision as the first pass --
+Same "leave the analytical tabs alone" decision as the first pass --
 this round only touched the two tabs a non-technical user actually
-works from.
+works from. (Superseded by the next entry below, same session: David
+then asked directly whether those analytical tabs were needed at all.)
+
+### Live-page: removed the analytical tabs entirely — done, verified 2026-09-22
+
+Direct follow-up question in the same session: "behöver man ha backtest,
+policy & frontier, datakvalitet? larm behöver var tycker jag" -- do we
+need backtest/policy-frontier/data-quality at all, larm (alerts) I think
+we need. Agreed with the reasoning and removed all three from
+`views/forecast_live.py`: `_render_backtest_tab()`, `_render_policy_tab()`,
+and `_render_quality_tab()` deleted outright (not hidden behind a flag --
+genuinely dead code once their tabs were gone, per this project's own
+"if unused, delete it" convention), along with the imports and constants
+that only existed for them (`simulate_policy`, `flag_censored`/
+`flag_outliers`/`flag_one_off_large_orders`, `FRONTIER_SERVICE_LEVELS`).
+`flag_level_shifts` stayed -- still used by the alerts tab's demand-shift
+detection.
+
+Down to 4 tabs: Beställningsförslag, Översikt, Artikelvy, Larm. The
+backtest itself (`_run_backtest`) is still run -- not for its own display
+anymore, but because the item-detail tab's forecast fan still needs to
+know which model won each segment; removing the tabs did not remove that
+dependency.
+
+This same analytical content still exists in `views/forecast_demo.py`
+(all 6 original spec tabs, untouched) -- that page's own audience is
+David exploring the synthetic demo estate to validate the engine itself,
+which is exactly what those three tabs are for. Nothing was lost, it
+was just never the right content for a client-facing live tenant page.
+
+Also cleaned up i18n entries orphaned by this and the previous
+simplification pass (`forecast.live_backtest_caption`,
+`forecast.live_no_policy_a_caption`, `forecast.live_quality_header`,
+`forecast.technical_tab_caption`, `forecast.technical_detail_label`,
+`forecast.orders_caption`, `forecast.item_forecast_plain_caption`) --
+`components/i18n.py` entries that are demo-page-shared (e.g.
+`forecast.tab_backtest`, `forecast.backtest_header`) were verified still
+in use there before leaving them alone.
+
+Full test suite unaffected (175 pytest, no new/changed logic -- a
+deletion of unused display code, not a change to any forecasting/*.py
+module). Verified by clicking through the resulting 4-tab page against
+Testbolaget AB's real data, including the Larm tab (still correctly
+computes off the same live backtest as before).
 
 ## Deployment (milestone 4 — in progress)
 

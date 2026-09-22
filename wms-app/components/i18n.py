@@ -532,7 +532,6 @@ STRINGS: dict[str, dict[str, str]] = {
     "forecast.alerts_none": {"sv": "Inga larm matchar filtret.", "en": "No alerts match the filter."},
 
     "forecast.quality_header": {"sv": "Datakvalitet (hela demodatan)", "en": "Data quality (full demo dataset)"},
-    "forecast.live_quality_header": {"sv": "Datakvalitet ({n} artiklar)", "en": "Data quality ({n} items)"},
     "forecast.quality_censored_metric": {"sv": "Stockout-censurerade rader", "en": "Stockout-censored lines"},
     "forecast.quality_outlier_metric": {"sv": "Avvikande perioder (outliers)", "en": "Outlier periods"},
     "forecast.quality_oneoff_metric": {"sv": "Engångsordrar (avvikande)", "en": "One-off large orders"},
@@ -555,18 +554,6 @@ STRINGS: dict[str, dict[str, str]] = {
         "sv": "Kör backtest (tar upp till en minut första gången, cachas sedan)...",
         "en": "Running backtest (takes up to a minute the first time, cached afterward)...",
     },
-    "forecast.live_backtest_caption": {
-        "sv": "Backtest kört live mot denna artikelstock -- cachas per session, inte förberäknat.",
-        "en": "Backtest run live against this item stock -- cached per session, not precomputed.",
-    },
-    "forecast.live_no_policy_a_caption": {
-        "sv": "Ingen jämförelse mot \"nuvarande ERP-parametrar\" här -- wms-appens egen artikeltabell "
-              "har ingen beställningspunkt/säkerhetslager-koncept ännu (se forecasting/data_wms.py). "
-              "Kurvan visar bara den kvantilbaserade policyn vid olika målnivåer.",
-        "en": "No comparison against \"current ERP parameters\" here -- wms-app's own items table has "
-              "no reorder-point/safety-stock concept yet (see forecasting/data_wms.py). The curve shows "
-              "only the quantile-based policy at different target levels.",
-    },
     "forecast.live_no_history_caption": {
         "sv": "Inga utleveranser registrerade ännu -- inget att prognostisera på.",
         "en": "No outbound deliveries recorded yet -- nothing to forecast from.",
@@ -576,10 +563,6 @@ STRINGS: dict[str, dict[str, str]] = {
     #    the original page was too technical for a client's own staff) ──────
     "forecast.tab_orders": {"sv": "Beställningsförslag", "en": "Order recommendations"},
     "forecast.orders_header": {"sv": "Vad behöver beställas?", "en": "What needs to be ordered?"},
-    "forecast.orders_caption": {
-        "sv": "Baserat på nuvarande lager och beräknad beställningspunkt per artikel.",
-        "en": "Based on current stock and each item's calculated reorder point.",
-    },
     "forecast.orders_spinner": {"sv": "Räknar ut beställningsförslag...", "en": "Calculating order recommendations..."},
     "forecast.orders_status_now": {"sv": "Beställ nu", "en": "Order now"},
     "forecast.orders_status_soon": {"sv": "Beställ snart", "en": "Order soon"},
@@ -599,18 +582,7 @@ STRINGS: dict[str, dict[str, str]] = {
     "forecast.explain_details_label": {"sv": "Läs mer", "en": "Read more"},
 
     "forecast.item_forecast_header_simple": {"sv": "Vad kan hända framöver?", "en": "What might happen next?"},
-    "forecast.item_forecast_plain_caption": {
-        "sv": "Det skuggade fältet visar ett sannolikt intervall -- mörkare i mitten (vanligast), "
-              "ljusare mot kanten (mindre sannolikt men möjligt).",
-        "en": "The shaded area shows a likely range -- darker in the middle (most likely), lighter "
-              "toward the edge (less likely but possible).",
-    },
     "forecast.item_forecast_y_axis": {"sv": "Antal", "en": "Quantity"},
-    "forecast.technical_detail_label": {"sv": "Teknisk detalj", "en": "Technical detail"},
-    "forecast.technical_tab_caption": {
-        "sv": "Den här fliken är till för uppföljning/validering av prognosmotorn, inte för dagliga beställningsbeslut -- se \"Beställningsförslag\" för det.",
-        "en": "This tab is for validating/monitoring the forecasting engine, not for day-to-day ordering decisions -- see \"Order recommendations\" for that.",
-    },
 
     "forecast.alerts_col_severity": {"sv": "Allvarlighetsgrad", "en": "Severity"},
     "forecast.alerts_col_type": {"sv": "Typ", "en": "Type"},

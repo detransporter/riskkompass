@@ -2,19 +2,27 @@
 (docs/FORECAST_SPEC.md Phase 10+, the live-tenant adapter every earlier
 phase's docstring flagged as future work -- see forecasting/data_wms.py).
 
-Same conceptual tabs as views/forecast_demo.py, computed LIVE (this
-tenant's item count is small enough -- hundreds, not 3,000 -- that the
-demo page's "precompute into small files" architecture isn't needed
-here; the backtest itself is the slow part, ~1 minute for a few hundred
-items with all 10 per-article models, cached per session via
-st.cache_data so only the first tab visit pays that cost).
+Four tabs, all aimed at the actual end user -- a client's own purchasing/
+operations staff, not David or a data analyst (confirmed directly:
+earlier versions of this page led with pinball-loss tables and quantile-
+labeled charts, which is wrong for that audience). "Beställningsförslag"
+(order recommendations) is the default tab and the only one most users
+need: a plain table of what to order, no model names or statistical
+terms anywhere in it.
 
-No "policy A (current ERP) vs policy B" comparison here, unlike Phase 7's
-demo-set report -- forecasting/data_wms.py's own docstring explains why:
-wms-app's live items table has no reorder_point/safety_stock/moq/
-order_multiple concept of its own, so there is no real "policy A" to
-compare against for a live tenant. The Policy & frontier tab here shows
-only the frontier curve (policy B at different target service levels).
+The three purely analytical tabs this page had in earlier revisions
+(backtest-by-segment, policy/service-level frontier, data quality) were
+removed after direct user feedback -- validation/monitoring tooling
+neither David nor a client's staff needs to see routinely; the "Larm"
+(alerts) tab stayed because it was explicitly asked for. That analytical
+view still exists in views/forecast_demo.py for whoever wants to
+validate the engine's methodology against the synthetic demo estate.
+
+The backtest itself (`_run_backtest`) is still run here -- not for
+display, but because `_render_item_view`'s forecast fan needs to know
+which model won each segment. ~1 minute for a few hundred items with all
+10 per-article models, cached per session via st.cache_data so only the
+first relevant tab visit pays that cost.
 """
 
 from __future__ import annotations
@@ -28,7 +36,7 @@ from components.i18n import get_lang, t
 from forecasting.data import build_demand_series
 from forecasting.data_wms import load_wms_tenant
 from forecasting.explain import explain_policy
-from forecasting.cleaning import flag_censored, flag_level_shifts, flag_one_off_large_orders, flag_outliers
+from forecasting.cleaning import flag_level_shifts
 from forecasting.backtest import run_backtest
 from forecasting.models.baselines import (
     moving_average_forecast, naive_forecast, seasonal_naive_forecast, ses_forecast,
@@ -40,11 +48,9 @@ from forecasting.monitoring import detect_persistent_bias, generate_alerts, obso
 from forecasting.policy import compute_policy
 from forecasting.probabilistic import build_supplier_lead_time_table, supplier_lead_time_samples
 from forecasting.segmentation import build_segment_table
-from forecasting.simulate import simulate_policy
 
 QUANTILES = (0.05, 0.1, 0.5, 0.8, 0.9, 0.95)
 FORECAST_HORIZONS = list(range(1, 14))
-FRONTIER_SERVICE_LEVELS = [0.80, 0.85, 0.90, 0.95, 0.98]
 FIXED_HORIZONS = (4, 13, 26)
 ORIGIN_STEP = 26
 MIN_TRAIN_PERIODS = 8
@@ -307,65 +313,6 @@ def _render_item_view(data: dict, company_slug: str) -> None:
         st.caption(t("forecast.item_forecast_caption", model=model_name))
 
 
-def _render_backtest_tab(data: dict, company_slug: str) -> None:
-    st.subheader(t("forecast.backtest_header"))
-    st.caption(t("forecast.live_backtest_caption"))
-    with st.spinner(t("forecast.live_backtest_spinner")):
-        backtest_results = _run_backtest(company_slug)
-    scores = score_models_by_segment(
-        backtest_results, data["segment_table"].set_index("article_id")["sbc_class"], quantile=0.9,
-    )
-    scores = scores[scores["segment"] != "no_demand"]
-    selection = select_best_model_per_segment(scores, quantile=0.9)
-    for segment in sorted(scores["segment"].dropna().unique()):
-        seg_scores = scores[scores["segment"] == segment].sort_values("pinball_q90")
-        if seg_scores.empty:
-            continue
-        with st.expander(f"{segment} -- {t('forecast.item_forecast_caption', model=selection.get(segment, '?'))}"):
-            st.dataframe(seg_scores, width="stretch", hide_index=True)
-
-
-def _render_policy_tab(data: dict) -> None:
-    st.subheader(t("forecast.policy_frontier_header"))
-    st.caption(t("forecast.live_no_policy_a_caption"))
-    items, segment_table = data["items"], data["segment_table"]
-    series_by_article = {aid: g.sort_values("period")["qty_ordered"] for aid, g in data["series"].groupby("article_id")}
-
-    frontier_rows = []
-    for target in FRONTIER_SERVICE_LEVELS:
-        fr_rows = []
-        for _, item in items.iterrows():
-            demand_periods = series_by_article.get(item["article_id"])
-            if demand_periods is None or len(demand_periods) < 10:
-                continue
-            lead_samples = supplier_lead_time_samples(data["lt_table"], item["supplier_id"])
-            policy = compute_policy(demand_periods, lead_samples, unit_cost=item["unit_cost_sek"],
-                                    abc_class=None, margin_per_unit=None, n_simulations=150)
-            # override the target service level for this sweep point
-            from forecasting.probabilistic import lead_time_demand_distribution
-            dist = lead_time_demand_distribution(demand_periods, lead_samples, quantiles=(target,), n_simulations=150)
-            rp = dist["quantiles"][target]
-            order_qty = policy["order_quantity"]
-            if order_qty <= 0:
-                continue
-            sim = simulate_policy(demand_periods.to_numpy(), rp, order_qty, lead_samples, initial_stock=rp + order_qty)
-            fr_rows.append({"fill_rate": sim["fill_rate"], "stock_value": sim["avg_stock"] * item["unit_cost_sek"],
-                            "total_demand": sim["total_demand"]})
-        fr_df = pd.DataFrame(fr_rows)
-        total_demand = fr_df["total_demand"].sum()
-        weighted_fill = (fr_df["fill_rate"] * fr_df["total_demand"]).sum() / total_demand if total_demand else float("nan")
-        frontier_rows.append({"target_service_level": target, "fill_rate": weighted_fill,
-                              "stock_value": fr_df["stock_value"].sum()})
-
-    frontier = pd.DataFrame(frontier_rows)
-    chart = alt.Chart(frontier).mark_line(point=True, color="#5B6270").encode(
-        x=alt.X("stock_value:Q", title=t("forecast.policy_stock_value_label")),
-        y=alt.Y("fill_rate:Q", title=t("forecast.policy_fill_rate_label"), scale=alt.Scale(zero=False)),
-        tooltip=["target_service_level", "fill_rate", "stock_value"],
-    )
-    st.altair_chart(chart.properties(height=350), width="stretch")
-
-
 def _render_alerts_tab(data: dict, company_slug: str) -> None:
     st.subheader(t("forecast.live_alerts_header", n=len(data["items"])))
     with st.spinner(t("forecast.live_backtest_spinner")):
@@ -417,23 +364,6 @@ def _render_alerts_tab(data: dict, company_slug: str) -> None:
     st.dataframe(display, width="stretch", hide_index=True)
 
 
-def _render_quality_tab(data: dict) -> None:
-    st.subheader(t("forecast.live_quality_header", n=len(data["items"])))
-    outbound, series = data["outbound"], data["series"]
-    censored = flag_censored(outbound)
-    outliers = flag_outliers(series)
-    one_off = flag_one_off_large_orders(series)
-    shifts = flag_level_shifts(series)
-
-    col1, col2 = st.columns(2)
-    col1.metric(t("forecast.quality_censored_metric"), f"{int(censored.sum())} / {len(censored)}")
-    col1.metric(t("forecast.quality_outlier_metric"), int(outliers.sum()))
-    col2.metric(t("forecast.quality_oneoff_metric"), int(one_off.sum()))
-    n_shifted = series.loc[shifts, "article_id"].nunique() if shifts.any() else 0
-    col2.metric(t("forecast.quality_shift_metric"), f"{n_shifted} / {data['items']['article_id'].nunique()}")
-    st.caption(t("forecast.quality_caption"))
-
-
 def render(user: auth.User) -> None:
     st.title(t("forecast.live_page_title"))
     st.caption(t("forecast.live_page_caption", company=user.company_name))
@@ -450,8 +380,7 @@ def render(user: auth.User) -> None:
 
     tabs = st.tabs([
         t("forecast.tab_orders"), t("forecast.tab_overview"), t("forecast.tab_item"),
-        t("forecast.tab_backtest"), t("forecast.tab_policy"), t("forecast.tab_alerts"),
-        t("forecast.tab_quality"),
+        t("forecast.tab_alerts"),
     ])
     with tabs[0]:
         _render_order_recommendations(data, user.company_slug)
@@ -460,12 +389,4 @@ def render(user: auth.User) -> None:
     with tabs[2]:
         _render_item_view(data, user.company_slug)
     with tabs[3]:
-        st.caption(t("forecast.technical_tab_caption"))
-        _render_backtest_tab(data, user.company_slug)
-    with tabs[4]:
-        st.caption(t("forecast.technical_tab_caption"))
-        _render_policy_tab(data)
-    with tabs[5]:
         _render_alerts_tab(data, user.company_slug)
-    with tabs[6]:
-        _render_quality_tab(data)
