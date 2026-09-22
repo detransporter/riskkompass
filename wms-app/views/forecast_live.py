@@ -143,9 +143,19 @@ def _compute_order_recommendations(company_slug: str) -> pd.DataFrame:
     return df.sort_values("_sort").drop(columns="_sort").reset_index(drop=True)
 
 
+def _render_policy_kpis(policy: dict, lead_samples) -> None:
+    col1, col2, col3 = st.columns(3)
+    col1.metric(t("forecast.kpi_reorder_point"), f"{policy['reorder_point']:.0f}")
+    col2.metric(t("forecast.kpi_safety_stock"), f"{policy['safety_stock']:.0f}")
+    col3.metric(t("forecast.kpi_order_qty"), f"{policy['order_quantity']:.0f}")
+    col4, col5 = st.columns(2)
+    col4.metric(t("forecast.kpi_service_level"), f"{policy['target_service_level']:.0%}")
+    if len(lead_samples) >= 2:
+        col5.metric(t("forecast.kpi_lead_time"), f"{int(min(lead_samples))}–{int(max(lead_samples))} d")
+
+
 def _render_order_recommendations(data: dict, company_slug: str) -> None:
     st.subheader(t("forecast.orders_header"))
-    st.caption(t("forecast.orders_caption"))
 
     with st.spinner(t("forecast.orders_spinner")):
         recs = _compute_order_recommendations(company_slug)
@@ -177,10 +187,9 @@ def _render_order_recommendations(data: dict, company_slug: str) -> None:
     st.dataframe(display.round(0), width="stretch", hide_index=True)
 
     st.divider()
-    st.subheader(t("forecast.orders_explain_header"))
     items = data["items"]
     label_by_id = (items["article_id"] + " -- " + items["description"].fillna("")).to_dict()
-    selected = st.selectbox(t("forecast.item_select_label"), list(recs["article_id"]),
+    selected = st.selectbox(t("forecast.orders_explain_header"), list(recs["article_id"]),
                             format_func=lambda aid: label_by_id.get(aid, aid), key="orders_explain_select")
     item = items[items["article_id"] == selected].iloc[0]
     seg_row = data["segment_table"][data["segment_table"]["article_id"] == selected].iloc[0]
@@ -189,7 +198,9 @@ def _render_order_recommendations(data: dict, company_slug: str) -> None:
     lead_samples = supplier_lead_time_samples(data["lt_table"], item["supplier_id"])
     policy = compute_policy(history, lead_samples, unit_cost=item["unit_cost_sek"], abc_class=seg_row["abc_class"],
                             moq=item["moq"], order_multiple=item["order_multiple"], n_simulations=200)
-    st.info(explain_policy(selected, item["description"], policy, seg_row["sbc_class"], history, lead_samples))
+    _render_policy_kpis(policy, lead_samples)
+    with st.expander(t("forecast.explain_details_label")):
+        st.write(explain_policy(selected, item["description"], policy, seg_row["sbc_class"], history, lead_samples))
 
 
 @st.cache_data(show_spinner=False)
@@ -268,7 +279,6 @@ def _render_item_view(data: dict, company_slug: str) -> None:
     model_fn = MODELS[model_name]
 
     st.subheader(t("forecast.item_forecast_header_simple"))
-    st.caption(t("forecast.item_forecast_plain_caption"))
     train = history["qty_ordered"]
     fan = _forecast_fan(train, model_fn)
     last_period = history["period"].max()
@@ -284,8 +294,6 @@ def _render_item_view(data: dict, company_slug: str) -> None:
         tooltip=["period:T", "q50:Q", "q5:Q", "q95:Q"],
     )
     st.altair_chart((band + band2 + median).properties(height=280), width="stretch")
-    with st.expander(t("forecast.technical_detail_label")):
-        st.caption(t("forecast.item_forecast_caption", model=model_name))
 
     st.subheader(t("forecast.item_policy_header"))
     lead_samples = supplier_lead_time_samples(data["lt_table"], item["supplier_id"])
@@ -293,8 +301,10 @@ def _render_item_view(data: dict, company_slug: str) -> None:
         train, lead_samples, unit_cost=item["unit_cost_sek"], abc_class=seg_row["abc_class"],
         moq=item["moq"], order_multiple=item["order_multiple"], n_simulations=300,
     )
-    explanation = explain_policy(selected, item["description"], policy, seg_row["sbc_class"], train, lead_samples)
-    st.info(explanation)
+    _render_policy_kpis(policy, lead_samples)
+    with st.expander(t("forecast.explain_details_label")):
+        st.write(explain_policy(selected, item["description"], policy, seg_row["sbc_class"], train, lead_samples))
+        st.caption(t("forecast.item_forecast_caption", model=model_name))
 
 
 def _render_backtest_tab(data: dict, company_slug: str) -> None:

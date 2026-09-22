@@ -547,12 +547,8 @@ STRINGS: dict[str, dict[str, str]] = {
     # ── views/forecast_live.py (docs/FORECAST_SPEC.md Phase 10+, live-tenant adapter) ──
     "forecast.live_page_title": {"sv": "Prognosmotor", "en": "Forecasting engine"},
     "forecast.live_page_caption": {
-        "sv": "Kör mot {company}s egna lagerdata -- inte demodatan. Se CLAUDE.md "
-              "\"forecasting/data_wms.py\" för vilka fält som saknas i den levande databasen "
-              "jämfört med den syntetiska demodatan (t.ex. ingen separat ordermängd för inleveranser).",
-        "en": "Runs against {company}'s own inventory data -- not the demo dataset. See CLAUDE.md "
-              "\"forecasting/data_wms.py\" for which fields the live database is missing compared to "
-              "the synthetic demo data (e.g. no separate ordered quantity for inbound receipts).",
+        "sv": "Baserat på {company}s egna lagerdata.",
+        "en": "Based on {company}'s own inventory data.",
     },
     "forecast.live_loading_spinner": {"sv": "Läser in data...", "en": "Loading data..."},
     "forecast.live_backtest_spinner": {
@@ -593,7 +589,14 @@ STRINGS: dict[str, dict[str, str]] = {
     "forecast.orders_col_stock": {"sv": "Nuvarande lager", "en": "Current stock"},
     "forecast.orders_col_reorder_point": {"sv": "Beställningspunkt", "en": "Reorder point"},
     "forecast.orders_col_order_qty": {"sv": "Föreslagen orderkvantitet", "en": "Suggested order quantity"},
-    "forecast.orders_explain_header": {"sv": "Varför? Välj en artikel", "en": "Why? Pick an item"},
+    "forecast.orders_explain_header": {"sv": "Välj en artikel", "en": "Pick an item"},
+
+    "forecast.kpi_reorder_point": {"sv": "Beställningspunkt", "en": "Reorder point"},
+    "forecast.kpi_safety_stock": {"sv": "Säkerhetslager", "en": "Safety stock"},
+    "forecast.kpi_order_qty": {"sv": "Orderkvantitet", "en": "Order quantity"},
+    "forecast.kpi_service_level": {"sv": "Målservicenivå", "en": "Target service level"},
+    "forecast.kpi_lead_time": {"sv": "Ledtid", "en": "Lead time"},
+    "forecast.explain_details_label": {"sv": "Läs mer", "en": "Read more"},
 
     "forecast.item_forecast_header_simple": {"sv": "Vad kan hända framöver?", "en": "What might happen next?"},
     "forecast.item_forecast_plain_caption": {

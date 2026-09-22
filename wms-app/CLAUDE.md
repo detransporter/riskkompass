@@ -1350,7 +1350,38 @@ logic -- `forecasting/explain.py` and `forecasting/policy.py`, which
 `_compute_order_recommendations()` calls unchanged, already have their
 own test coverage from Phase 6). Verified by running the app and
 clicking through both the order-recommendations table and the simplified
-item view against Testbolaget AB's real data. Not committed yet.
+item view against Testbolaget AB's real data.
+
+### Live-page second simplification pass — done, verified 2026-09-22
+
+Follow-up in the same session: after the first pass above, David pointed
+at a Power BI/Aimplan dashboard screenshot as a reference for "this is
+much simpler" -- the gap was not jargon this time (that was already
+fixed), it was sheer TEXT VOLUME. Every KPI on the page was still wrapped
+in a full sentence or a caption underneath it, where the reference image
+had none of that: just numbers in tiles and clean charts, no narration.
+
+Replaced the single dense Swedish paragraph (still the output of
+`forecasting/explain.py:explain_policy()`, itself unchanged) with a row
+of plain `st.metric()` tiles -- Beställningspunkt, Säkerhetslager,
+Orderkvantitet, Målservicenivå, Ledtid -- in both the new order-
+recommendations tab and the item-detail tab (`_render_policy_kpis()`,
+one shared helper, not duplicated). The full sentence is still there,
+just moved into a collapsed "Läs mer" expander for whoever wants the
+prose reasoning rather than just the numbers.
+
+Also cut caption text that was explaining the page to itself rather than
+to the user: the forecast-fan chart's caption sentence removed (the
+tiles now speak for themselves); the page's own top-level caption
+shortened from a two-sentence paragraph that literally named a source
+file ("Se CLAUDE.md \"forecasting/data_wms.py\" för vilka fält...") down
+to one line ("Baserat på {company}s egna lagerdata.") -- a client's own
+staff has no reason to be pointed at this repository's internal
+documentation.
+
+Same "leave the four analytical tabs alone" decision as the first pass --
+this round only touched the two tabs a non-technical user actually
+works from.
 
 ## Deployment (milestone 4 — in progress)
 
